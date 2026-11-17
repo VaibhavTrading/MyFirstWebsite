@@ -861,7 +861,7 @@ function switchMode(mode) {
 
         const btnSr = document.getElementById('btn-shadow-removal');
         if (btnSr) {
-            btnSr.innerText = `Shadow Remov: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+            btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
             btnSr.classList.toggle('active', shadowRemovalActive);
         }
         setFilterMode(filterMode);
@@ -977,7 +977,7 @@ function switchMode(mode) {
 
         const btnSr = document.getElementById('btn-shadow-removal');
         if (btnSr) {
-            btnSr.innerText = `Shadow Remov: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+            btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
             btnSr.classList.toggle('active', shadowRemovalActive);
         }
         setFilterMode(filterMode);
@@ -1467,7 +1467,7 @@ function setActiveImage(idx) {
     shadowRemovalActive = !!imgObj.shadowRemoval;
     let btnSr = document.getElementById('btn-shadow-removal');
     if(btnSr) {
-        btnSr.innerText = `Shadow Remov: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+        btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
         btnSr.classList.toggle('active', shadowRemovalActive);
     }
     setFilterMode(imgObj.filterMode || 'GRAYSCALE');
@@ -1679,7 +1679,7 @@ function toggleShadowRemoval() {
     shadowRemovalActive = !shadowRemovalActive;
     let btn = document.getElementById('btn-shadow-removal');
     if(btn) {
-        btn.innerText = `Shadow Remov: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+        btn.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
         btn.classList.toggle('active', shadowRemovalActive);
     }
     if (activeIndex !== -1 && imageArray[activeIndex]) {

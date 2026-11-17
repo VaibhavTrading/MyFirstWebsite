@@ -3,7 +3,7 @@
  * Complete offline caching for Document Studio, ID Card Studio, Image & PDF Editor
  */
 
-const CACHE_NAME = 'monu-offline-v2.4';
+const CACHE_NAME = 'monu-offline-v2.6';
 
 const PRECACHE_URLS = [
   '/',
@@ -46,9 +46,9 @@ const PRECACHE_URLS = [
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
-  '/assets/aistudio/Document_Studio_Neon_Feature_Showcase_b3130b6f.png',
-  '/assets/aistudio/Gemini_Generated_Image_oedxj3oedxj3oedx_65a15a70.png',
-  '/assets/aistudio/Gemini_Generated_Image_oj4tkeoj4tkeoj4t_469c242c.png'
+  '/assets/aistudio/Document_Studio_Neon_Feature_Showcase_b3130b6f.jpg',
+  '/assets/aistudio/Gemini_Generated_Image_oedxj3oedxj3oedx_65a15a70.jpg',
+  '/assets/aistudio/Gemini_Generated_Image_oj4tkeoj4tkeoj4t_469c242c.jpg'
 ];
 
 // Essential External CDNs for Offline Canvas & Document Processing

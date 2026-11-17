@@ -319,11 +319,11 @@
 
         // Update URL & Meta
         currentRoutePath = pathname;
-        const cleanTargetHash = (hash === '#explore-tools') ? '' : (hash || '');
+        const cleanTargetHash = (hash === '#explore-our-tools') ? '' : (hash || '');
         const fullTargetUrl = pathname + search + cleanTargetHash;
         if (push && (window.location.pathname + window.location.search + window.location.hash) !== fullTargetUrl) {
             window.history.pushState({ path: pathname, search: search, hash: cleanTargetHash }, route.title, fullTargetUrl);
-        } else if (!push && hash === '#explore-tools' && pathname === '/') {
+        } else if (!push && (hash === '#explore-tools' || hash === '#explore-our-tools') && pathname === '/') {
             window.history.replaceState({ path: '/', search: '', hash: '' }, route.title, '/');
         }
 
@@ -335,8 +335,8 @@
         if (mobileDrawer) mobileDrawer.classList.remove('open');
 
         // Scroll to hash target on explicit navigation, otherwise scroll to top on load/reload
-        if (hash && (push || hash !== '#explore-tools')) {
-            scrollToHash(hash);
+        if (hash && (push || (hash !== '#explore-tools' && hash !== '#explore-our-tools'))) {
+            scrollToHash(hash === '#explore-tools' ? '#explore-our-tools' : hash);
         } else {
             window.scrollTo({ top: 0, behavior: push ? 'smooth' : 'auto' });
         }
@@ -510,9 +510,10 @@
                     // If same page with hash anchor, scroll smoothly without full reload
                     if (pathname === currentRoutePath && hash) {
                         e.preventDefault();
-                        scrollToHash(hash);
-                        if (hash !== '#explore-tools') {
-                            window.history.pushState({ path: pathname, hash: hash }, document.title, pathname + hash);
+                        const resolvedHash = (hash === '#explore-tools') ? '#explore-our-tools' : hash;
+                        scrollToHash(resolvedHash);
+                        if (resolvedHash !== '#explore-our-tools') {
+                            window.history.pushState({ path: pathname, hash: resolvedHash }, document.title, pathname + resolvedHash);
                         }
                         return;
                     }
