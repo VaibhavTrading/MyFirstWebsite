@@ -759,6 +759,88 @@ select:focus, input[type="text"]:focus { border-color: #b621fe; box-shadow: 0 0 
     margin-bottom: 10px;
 }
 
+/* Color Balance Gradient Sliders (Cyan-Red, Magenta-Green, Yellow-Blue) */
+.color-balance-group {
+    margin-bottom: 10px;
+}
+.color-balance-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+.cb-label-cyan { color: #0891b2; }
+.cb-label-red { color: #dc2626; }
+.cb-label-magenta { color: #c026d3; }
+.cb-label-green { color: #16a34a; }
+.cb-label-yellow { color: #ca8a04; }
+.cb-label-blue { color: #2563eb; }
+.cb-val {
+    font-size: 11px;
+    font-weight: 800;
+    color: #475569;
+    font-variant-numeric: tabular-nums;
+}
+
+input[type="range"].color-balance-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    box-sizing: border-box;
+}
+input[type="range"].color-balance-range.cyan-red {
+    background: linear-gradient(90deg, #00f0ff 0%, #7d8989 50%, #ff1e1e 100%) !important;
+}
+input[type="range"].color-balance-range.magenta-green {
+    background: linear-gradient(90deg, #ff00ff 0%, #7d8989 50%, #00e626 100%) !important;
+}
+input[type="range"].color-balance-range.yellow-blue {
+    background: linear-gradient(90deg, #ffe600 0%, #7d8989 50%, #0038ff 100%) !important;
+}
+input[type="range"].color-balance-range::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 999px;
+    background: transparent;
+}
+input[type="range"].color-balance-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50% 50% 3px 3px;
+    background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+    border: 1.5px solid #334155;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.32);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+input[type="range"].color-balance-range::-webkit-slider-thumb:hover {
+    transform: scale(1.14);
+}
+input[type="range"].color-balance-range::-moz-range-track {
+    height: 5px;
+    border-radius: 999px;
+    background: transparent;
+}
+input[type="range"].color-balance-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50% 50% 3px 3px;
+    background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+    border: 1.5px solid #334155;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.32);
+    cursor: pointer;
+}
+
 #print-area { display: none; }
 
 
@@ -984,10 +1066,10 @@ select:focus, input[type="text"]:focus { border-color: #b621fe; box-shadow: 0 0 
     justify-content: center !important;
 }
 
-/* Editor Main Body Grid - Left Tool Panel width reduced by 25% (248px * 0.75 = 186px) */
+/* Editor Main Body Grid - Left Tool Panel width matched to Document Studio (258px) */
 .editor-body-grid {
     display: grid;
-    grid-template-columns: 186px minmax(0, 1fr);
+    grid-template-columns: 258px minmax(0, 1fr);
     grid-template-areas: "toolpane preview";
     gap: 14px;
     padding: 12px 16px;
@@ -999,7 +1081,7 @@ select:focus, input[type="text"]:focus { border-color: #b621fe; box-shadow: 0 0 
     box-sizing: border-box;
 }
 #passportWorkspace .editor-body-grid {
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: 258px minmax(0, 1fr);
 }
 
 /* Preview Stage Container with maximum visual workspace */

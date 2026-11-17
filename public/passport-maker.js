@@ -660,16 +660,17 @@
         const br = document.getElementById('passBrSlider')?.value || 100;
         const ct = document.getElementById('passCtSlider')?.value || 100;
         const gm = parseFloat(document.getElementById('passGammaSlider')?.value || 1.0);
-        const r = document.getElementById('passRSlider')?.value || 0;
-        const g = document.getElementById('passGSlider')?.value || 0;
-        const b = document.getElementById('passBSlider')?.value || 0;
+        const r = parseInt(document.getElementById('passRSlider')?.value || 0, 10);
+        const g = parseInt(document.getElementById('passGSlider')?.value || 0, 10);
+        const b = parseInt(document.getElementById('passBSlider')?.value || 0, 10);
+        const fmtSigned = (v) => (v > 0 ? '+' + v : String(v));
 
         document.querySelectorAll('#passBrVal').forEach(el => el.textContent = br + '%');
         document.querySelectorAll('#passCtVal').forEach(el => el.textContent = ct + '%');
         document.querySelectorAll('#passGammaVal').forEach(el => el.textContent = gm.toFixed(2));
-        document.querySelectorAll('#passRVal').forEach(el => el.textContent = r);
-        document.querySelectorAll('#passGVal').forEach(el => el.textContent = g);
-        document.querySelectorAll('#passBVal').forEach(el => el.textContent = b);
+        document.querySelectorAll('#passRVal').forEach(el => el.textContent = fmtSigned(r));
+        document.querySelectorAll('#passGVal').forEach(el => el.textContent = fmtSigned(g));
+        document.querySelectorAll('#passBVal').forEach(el => el.textContent = fmtSigned(b));
 
         renderPassportCanvas();
     }

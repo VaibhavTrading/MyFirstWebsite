@@ -30,7 +30,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=20261116g">
+    <link rel="stylesheet" href="/style.css?v=20261116h">
 </head>
 <body>
 <div class="dashboard">
@@ -300,17 +300,29 @@
 
                                             <div class="adj-category-section">
                                                 <div class="adj-category-header">Color Settings</div>
-                                                <div class="control-group">
-                                                    <div class="control-label"><span>Red Balance</span><span id="passRVal" style="color:#dc2626;">0</span></div>
-                                                    <input type="range" id="passRSlider" min="-50" max="50" value="0" style="accent-color:#ef4444;" oninput="updatePassportAdjustments()">
+                                                <div class="control-group color-balance-group">
+                                                    <div class="color-balance-meta">
+                                                        <span class="cb-label-cyan">Cyan</span>
+                                                        <span class="cb-val" id="passRVal">0</span>
+                                                        <span class="cb-label-red">Red</span>
+                                                    </div>
+                                                    <input type="range" id="passRSlider" class="color-balance-range cyan-red" min="-50" max="50" value="0" aria-label="Cyan to Red Balance" oninput="updatePassportAdjustments()">
                                                 </div>
-                                                <div class="control-group">
-                                                    <div class="control-label"><span>Green Balance</span><span id="passGVal" style="color:#16a34a;">0</span></div>
-                                                    <input type="range" id="passGSlider" min="-50" max="50" value="0" style="accent-color:#22c55e;" oninput="updatePassportAdjustments()">
+                                                <div class="control-group color-balance-group">
+                                                    <div class="color-balance-meta">
+                                                        <span class="cb-label-magenta">Magenta</span>
+                                                        <span class="cb-val" id="passGVal">0</span>
+                                                        <span class="cb-label-green">Green</span>
+                                                    </div>
+                                                    <input type="range" id="passGSlider" class="color-balance-range magenta-green" min="-50" max="50" value="0" aria-label="Magenta to Green Balance" oninput="updatePassportAdjustments()">
                                                 </div>
-                                                <div class="control-group">
-                                                    <div class="control-label"><span>Blue Balance</span><span id="passBVal" style="color:#2563eb;">0</span></div>
-                                                    <input type="range" id="passBSlider" min="-50" max="50" value="0" style="accent-color:#3b82f6;" oninput="updatePassportAdjustments()">
+                                                <div class="control-group color-balance-group">
+                                                    <div class="color-balance-meta">
+                                                        <span class="cb-label-yellow">Yellow</span>
+                                                        <span class="cb-val" id="passBVal">0</span>
+                                                        <span class="cb-label-blue">Blue</span>
+                                                    </div>
+                                                    <input type="range" id="passBSlider" class="color-balance-range yellow-blue" min="-50" max="50" value="0" aria-label="Yellow to Blue Balance" oninput="updatePassportAdjustments()">
                                                 </div>
                                             </div>
 
@@ -499,8 +511,8 @@
 
 <!-- Passport Photo Maker Script loader -->
 <script src="/assets/aistudio/bk_remove_js_ec9f57e0.js"></script>
-<script src="/passport-maker.js?v=20261116g"></script>
-<script src="/site-router.js?v=20261116g"></script>
+<script src="/passport-maker.js?v=20261116h"></script>
+<script src="/site-router.js?v=20261116h"></script>
 <script src="/pwa-controller.js"></script>
 </body>
 </html>
