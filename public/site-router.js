@@ -129,11 +129,13 @@
     }
 
     function parseUrl(rawUrl) {
-        let urlStr = rawUrl || (window.location.pathname + window.location.hash);
-        let [pathPart, hashPart] = urlStr.split('#');
+        let urlStr = rawUrl || (window.location.pathname + window.location.search + window.location.hash);
+        let [beforeHash, hashPart] = urlStr.split('#');
+        let [pathPart, searchPart] = beforeHash.split('?');
         let pathname = normalizePath(pathPart || '/');
+        let search = searchPart ? '?' + searchPart : '';
         let hash = hashPart ? '#' + hashPart : '';
-        return { pathname, hash };
+        return { pathname, search, hash };
     }
 
     function updateMetaTags(routeInfo) {
@@ -211,7 +213,7 @@
         }, 80);
     }
 
-    function mountStudioTool(targetPath) {
+    function mountStudioTool(targetPath, requestedTool) {
         const workspace = document.getElementById('shared-studio-workspace') || document.getElementById('page-studio-workspace');
         if (!workspace) return;
 
@@ -239,6 +241,13 @@
 
             if (typeof window.switchMode === 'function') {
                 window.switchMode(mode);
+            }
+
+            if (targetPath === '/image-pdf-editor' && requestedTool && typeof window.switchTool === 'function') {
+                const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'watermark', 'img2pdf', 'pdfcompress'];
+                if (validTools.includes(requestedTool)) {
+                    window.switchTool(requestedTool);
+                }
             }
         }
     }
@@ -277,8 +286,9 @@
     }
 
     function navigateTo(url, push = true) {
-        const { pathname, hash } = parseUrl(url);
+        const { pathname, search, hash } = parseUrl(url);
         const route = ROUTES[pathname] || ROUTES['/'];
+        const requestedTool = search ? (new URLSearchParams(search).get('tool') || '') : '';
 
         // Hide all page views
         const pages = document.querySelectorAll('.page-view');
@@ -297,7 +307,7 @@
 
         // Mount tool directly into Section 3 if navigating to one of the 3 tool pages
         if (pathname === '/document-studio' || pathname === '/id-card-studio' || pathname === '/image-pdf-editor') {
-            mountStudioTool(pathname);
+            mountStudioTool(pathname, requestedTool);
         } else if (pathname === '/passport-photo-maker') {
             if (typeof window.checkPendingPassportTransfer === 'function') {
                 window.checkPendingPassportTransfer();
@@ -310,11 +320,11 @@
         // Update URL & Meta
         currentRoutePath = pathname;
         const cleanTargetHash = (hash === '#explore-tools') ? '' : (hash || '');
-        const fullTargetUrl = pathname + cleanTargetHash;
-        if (push && (window.location.pathname + window.location.hash) !== fullTargetUrl) {
-            window.history.pushState({ path: pathname, hash: cleanTargetHash }, route.title, fullTargetUrl);
+        const fullTargetUrl = pathname + search + cleanTargetHash;
+        if (push && (window.location.pathname + window.location.search + window.location.hash) !== fullTargetUrl) {
+            window.history.pushState({ path: pathname, search: search, hash: cleanTargetHash }, route.title, fullTargetUrl);
         } else if (!push && hash === '#explore-tools' && pathname === '/') {
-            window.history.replaceState({ path: '/', hash: '' }, route.title, '/');
+            window.history.replaceState({ path: '/', search: '', hash: '' }, route.title, '/');
         }
 
         updateMetaTags(route);
@@ -516,7 +526,7 @@
 
         // Handle Browser Back / Forward buttons
         window.addEventListener('popstate', function () {
-            navigateTo(window.location.pathname + window.location.hash, false);
+            navigateTo(window.location.pathname + window.location.search + window.location.hash, false);
         });
 
         // Handle URL hash changes
@@ -554,7 +564,7 @@
         }
 
         // Initial Route Resolution on Load
-        const initialFullUrl = window.location.pathname + window.location.hash;
+        const initialFullUrl = window.location.pathname + window.location.search + window.location.hash;
         const parsed = parseUrl(initialFullUrl);
         if (ROUTES[parsed.pathname]) {
             navigateTo(initialFullUrl, false);
