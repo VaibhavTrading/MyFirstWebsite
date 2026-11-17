@@ -3,7 +3,7 @@
  * Complete offline caching for Document Studio, ID Card Studio, Image & PDF Editor
  */
 
-const CACHE_NAME = 'monu-offline-v2.6';
+const CACHE_NAME = 'monu-offline-v2.7';
 
 const PRECACHE_URLS = [
   '/',
@@ -46,9 +46,19 @@ const PRECACHE_URLS = [
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
+  '/assets/aistudio/document_enhance_tool_2ea982eb.jpg',
+  '/assets/aistudio/id_card_print_fd5b6cdf.jpg',
+  '/assets/aistudio/photo_sign_resizer_c8c210fc.jpg',
+  '/assets/aistudio/passport_photo_maker_bcceb724.jpg',
+  '/assets/aistudio/image_compress_33297c13.jpg',
+  '/assets/aistudio/image_to_pdf_8b1aabcf.jpg',
+  '/assets/aistudio/Format_Converter_b8d9f5b1.jpg',
+  '/assets/aistudio/pdf_origenizer_1e52bf95.jpg',
+  '/assets/aistudio/watermark_add_aef1133d.jpg',
   '/assets/aistudio/Document_Studio_Neon_Feature_Showcase_b3130b6f.jpg',
   '/assets/aistudio/Gemini_Generated_Image_oedxj3oedxj3oedx_65a15a70.jpg',
-  '/assets/aistudio/Gemini_Generated_Image_oj4tkeoj4tkeoj4t_469c242c.jpg'
+  '/assets/aistudio/Gemini_Generated_Image_oj4tkeoj4tkeoj4t_469c242c.jpg',
+  '/assets/aistudio/SVT_Logo_ac2e6fdb.png'
 ];
 
 // Essential External CDNs for Offline Canvas & Document Processing

@@ -10,7 +10,7 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: 'prompt',
+        registerType: 'autoUpdate',
         injectRegister: false,
         includeAssets: [
           'favicon.ico',
@@ -71,7 +71,11 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2,json}'],
+          skipWaiting: true,
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
           navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/assets\//, /^\/videos\//, /^\/mediapipe\//],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/docs\.opencv\.org\/.*/i,

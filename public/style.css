@@ -5858,6 +5858,7 @@ select:focus {
 .explore-tool-thumb-box {
     width: 100%;
     aspect-ratio: 800 / 447;
+    flex-shrink: 0;
     background: #ffffff;
     border-bottom: 1px solid #e2e8f0;
     overflow: hidden;
