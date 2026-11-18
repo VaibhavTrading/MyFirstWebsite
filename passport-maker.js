@@ -1533,8 +1533,12 @@
 
         const modal = document.getElementById('passport-print-modal');
         if (modal) {
+            document.documentElement.classList.add('print-modal-open');
+            document.body.classList.add('print-modal-open');
             modal.classList.add('active');
             modal.setAttribute('aria-hidden', 'false');
+            const stage = modal.querySelector('.doc-print-stage');
+            if (stage) stage.scrollTop = 0;
             await renderPassportPrintTargets();
             setPassportStatus(`Print preview ready (${PAPER_SPECS[passPaperSize].label}, ${passPhotoCount} photos). Click Print Now or Download PDF.`, 'ok');
         } else {
@@ -1548,6 +1552,11 @@
         if (modal) {
             modal.classList.remove('active');
             modal.setAttribute('aria-hidden', 'true');
+        }
+        const docModal = document.getElementById('doc-print-modal');
+        if (!docModal || !docModal.classList.contains('active')) {
+            document.documentElement.classList.remove('print-modal-open');
+            document.body.classList.remove('print-modal-open');
         }
     }
 

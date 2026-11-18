@@ -564,14 +564,16 @@ select:focus, input[type="text"]:focus { border-color: #b621fe; box-shadow: 0 0 
 .bucket-label { position: absolute; bottom: -18px; left: 0; width: 100%; text-align: center; font-size: 10px; font-weight: 700; color: var(--text-dark); }
 .bucket-pair-delete { position: absolute; top: -6px; right: -6px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; width: 20px; height: 20px; border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; }
 
-.doc-print-modal { position: fixed; inset: 0; z-index: 1000; display: none; grid-template-rows: auto 1fr; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); }
+html.print-modal-open,
+body.print-modal-open { overflow: hidden !important; overscroll-behavior: none !important; }
+.doc-print-modal { position: fixed; inset: 0; width: 100%; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 20000; display: none; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; overscroll-behavior: contain; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); }
 .doc-print-modal.active { display: grid; }
 .doc-print-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 20px; background: #FFFFFF; border-bottom: 2px solid var(--accent-purple); }
 .doc-print-toolbar h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--plum-deep); }
 .doc-print-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.doc-print-stage { overflow: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.a4-page-preview { position: relative; width: min(78vw, 794px); aspect-ratio: 210 / 297; background: #e7e7e7; box-shadow: 0 30px 70px rgba(0,0,0,0.5); overflow: hidden; }
-.a4-page-preview img { position: absolute; left: 0; top: 0; width: 100%; height: auto; cursor: move; }
+.doc-print-stage { min-height: 0; width: 100%; height: 100%; overflow-y: auto; overflow-x: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box; }
+.a4-page-preview { position: relative; width: min(78vw, 794px); aspect-ratio: 210 / 297; flex-shrink: 0; background: #e7e7e7; box-shadow: 0 30px 70px rgba(0,0,0,0.5); overflow: hidden; }
+.a4-page-preview img { position: absolute; left: 0; top: 0; width: 100%; height: auto; cursor: move; touch-action: none; }
 .modal-btn { border: none; border-radius: 6px; padding: 8px 14px; font-weight: 700; font-size: 12.5px; cursor: pointer; background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%); color: #FFFFFF; white-space: nowrap; box-shadow: 0 4px 12px rgba(131, 0, 201, 0.25); transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .modal-btn:hover { background: linear-gradient(135deg, #6e00a8 0%, #0074a6 100%); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(131, 0, 201, 0.34); }
 .modal-btn.secondary { background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%); color: #ffffff; box-shadow: 0 4px 12px rgba(131, 0, 201, 0.25); }

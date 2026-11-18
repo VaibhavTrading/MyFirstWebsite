@@ -2283,8 +2283,13 @@ function openDocPrintPreview() {
     img.src = activeCanvas.toDataURL('image/jpeg', 1.0);
     docPrintState = { x: 0, y: 0, scale: 1, dragging: false, startX: 0, startY: 0, baseX: 0, baseY: 0 }; 
     document.getElementById('doc-print-scale').value = 100; 
+    document.documentElement.classList.add('print-modal-open');
+    document.body.classList.add('print-modal-open');
     modal.classList.add('active'); 
     modal.setAttribute('aria-hidden', 'false'); 
+    const stage = modal.querySelector('.doc-print-stage');
+    if (stage) stage.scrollTop = 0;
+    initDocPrintDrag();
     updateDocPrintPreview();
 }
 
@@ -2299,8 +2304,15 @@ function updateDocPrintPreview() {
 
 function closeDocPrintPreview() { 
     let modal = document.getElementById('doc-print-modal'); 
-    modal.classList.remove('active'); 
-    modal.setAttribute('aria-hidden', 'true'); 
+    if (modal) {
+        modal.classList.remove('active'); 
+        modal.setAttribute('aria-hidden', 'true'); 
+    }
+    const passportModal = document.getElementById('passport-print-modal');
+    if (!passportModal || !passportModal.classList.contains('active')) {
+        document.documentElement.classList.remove('print-modal-open');
+        document.body.classList.remove('print-modal-open');
+    }
 }
 
 async function confirmDocPrintPreview() {
@@ -2519,6 +2531,14 @@ function initDocPrintDrag() {
     window.addEventListener('touchmove', move, {passive:false}); 
     window.addEventListener('mouseup', end); 
     window.addEventListener('touchend', end);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('doc-print-modal');
+            if (modal && modal.classList.contains('active')) {
+                closeDocPrintPreview();
+            }
+        }
+    });
 }
 
 window.addEventListener('load', initDocPrintDrag);
