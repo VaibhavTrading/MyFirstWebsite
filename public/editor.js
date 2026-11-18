@@ -4,7 +4,7 @@
  */
 
 /**
- * Separate Database for Image & PDF Editor
+ * Separate Database for Image Editor
  * Database B: Monu_ImagePDFEditor_DB
  */
 window.ImagePDFEditorDB = {
@@ -141,6 +141,78 @@ function updateImageInfoBar(imgElement, dataUrl, filename, originalFile) {
     if (aspectEl) aspectEl.textContent = aspectRatioDisplay;
     if (formatEl) formatEl.textContent = `${format} • ${mp} MP`;
 }
+
+function formatEditorBytes(bytes) {
+    if (!bytes || bytes <= 0) return '—';
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(2)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+}
+
+function updatePdfWorkspaceInfoBar(toolId) {
+    const dimEl = document.getElementById('editorInfoDim') || document.getElementById('barImgDim');
+    const sizeEl = document.getElementById('editorInfoSize') || document.getElementById('barImgSize');
+    if (!dimEl && !sizeEl) return;
+
+    if (toolId === 'img2pdf') {
+        const n = img2pdfFiles.length;
+        if (n === 0) {
+            if (sizeEl) sizeEl.textContent = 'Size: —';
+            if (dimEl) dimEl.textContent = 'Dimensions: No Images Loaded';
+            return;
+        }
+        const idx = Math.max(0, Math.min(i2pActiveIdx, n - 1));
+        const item = img2pdfFiles[idx];
+        const totalBytes = img2pdfFiles.reduce((sum, f) => sum + ((f.file && f.file.size) || 0), 0);
+        const itemBytes = item && item.file ? item.file.size : 0;
+        const rot = item ? ((item.rotation || 0) % 360) : 0;
+        let w = item ? (item.width || 0) : 0;
+        let h = item ? (item.height || 0) : 0;
+        if (rot === 90 || rot === 270) [w, h] = [h, w];
+
+        if (sizeEl) {
+            sizeEl.textContent = n > 1
+                ? `Size: ${formatEditorBytes(itemBytes)} (Total: ${formatEditorBytes(totalBytes)})`
+                : `Size: ${formatEditorBytes(itemBytes)}`;
+        }
+        if (dimEl) {
+            dimEl.textContent = (w > 0 && h > 0)
+                ? `Dimensions: ${w} × ${h} px (Page ${idx + 1}/${n})`
+                : `Dimensions: Page ${idx + 1}/${n}`;
+        }
+        return;
+    }
+
+    if (toolId === 'pdfcompress') {
+        const n = pdfOptPages.length;
+        if (n === 0) {
+            if (sizeEl) sizeEl.textContent = 'Size: —';
+            if (dimEl) dimEl.textContent = 'Dimensions: No Files Loaded';
+            return;
+        }
+        const idx = Math.max(0, Math.min(pdfOptActiveIdx, n - 1));
+        const item = pdfOptPages[idx];
+        const totalBytes = pdfOptPages.reduce((sum, p) => sum + (p.origBytes || 0), 0);
+        const itemBytes = item ? (item.origBytes || 0) : 0;
+        const rot = item ? ((item.rotation || 0) % 360) : 0;
+        let w = item ? (item.width || 0) : 0;
+        let h = item ? (item.height || 0) : 0;
+        if (rot === 90 || rot === 270) [w, h] = [h, w];
+        const unitLabel = item && item.type === 'pdf' ? 'pt' : 'px';
+
+        if (sizeEl) {
+            sizeEl.textContent = n > 1
+                ? `Size: ${formatEditorBytes(itemBytes)} (Total: ${formatEditorBytes(totalBytes)})`
+                : `Size: ${formatEditorBytes(itemBytes)}`;
+        }
+        if (dimEl) {
+            dimEl.textContent = (w > 0 && h > 0)
+                ? `Dimensions: ${w} × ${h} ${unitLabel} (Page ${idx + 1}/${n})`
+                : `Dimensions: Page ${idx + 1}/${n}`;
+        }
+    }
+}
+window.updatePdfWorkspaceInfoBar = updatePdfWorkspaceInfoBar;
 
 // ═══ BRIDGE: TRANSFER BETWEEN DOCUMENT STUDIO AND EDITOR ═══
 function openCurrentInEditor() {
@@ -440,7 +512,7 @@ async function sendEditorImageTo(destination) {
     if (destination === 'passport') {
         const hasSpaPassport = !!document.getElementById('page-passport-maker') && typeof window.loadPassportFromDataUrl === 'function';
         if (hasSpaPassport) {
-            window.loadPassportFromDataUrl(payload.dataUrl, 'Image & PDF Editor');
+            window.loadPassportFromDataUrl(payload.dataUrl, 'Image Editor');
             if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
                 MonuRouter.navigateTo('/passport-photo-maker');
             }
@@ -452,14 +524,14 @@ async function sendEditorImageTo(destination) {
                 await window.ImagePDFEditorDB.saveEditorData('pending_passport_transfer', {
                     dataUrl: payload.dataUrl,
                     name: payload.name || 'passport_photo.jpg',
-                    source: 'Image & PDF Editor',
+                    source: 'Image Editor',
                     timestamp: Date.now()
                 });
                 sessionStorage.setItem('monu_pending_passport_transfer', '1');
             } else {
                 sessionStorage.setItem('monu_passport_transfer_data', JSON.stringify({
                     dataUrl: payload.dataUrl,
-                    source: 'Image & PDF Editor'
+                    source: 'Image Editor'
                 }));
                 sessionStorage.setItem('monu_pending_passport_transfer', '1');
             }
@@ -474,14 +546,38 @@ async function sendEditorImageTo(destination) {
         return;
     }
 
-    if (destination === 'img2pdf') {
-        switchTool('img2pdf', null);
-        await addFilesToImg2Pdf([payload.file]);
-        showEditorStatus('✅ Image added directly to Images to PDF!', 'ok');
-    } else if (destination === 'pdfcompress') {
-        switchTool('pdfcompress', null);
-        await addFilesToPdfOptimizer([payload.file]);
-        showEditorStatus('✅ Image added directly to PDF Optimizer!', 'ok');
+    if (destination === 'img2pdf' || destination === 'pdfcompress') {
+        const transferPayload = {
+            source: 'Image Editor',
+            targetTool: destination,
+            items: [{ dataUrl: payload.dataUrl, name: payload.name || 'edited_image.jpg' }],
+            timestamp: Date.now()
+        };
+        const hasDocPage = !!document.getElementById('page-doc-studio');
+        if (hasDocPage && typeof window.switchMode === 'function') {
+            if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
+                MonuRouter.navigateTo('/document-studio?tool=' + destination);
+            } else {
+                switchMode('DOC');
+                if (typeof window.switchDocStudioTool === 'function') window.switchDocStudioTool(destination);
+            }
+            await receiveCrossStudioTransfer(transferPayload);
+            return;
+        }
+        try {
+            if (window.ImagePDFEditorDB) {
+                await window.ImagePDFEditorDB.saveEditorData('pending_cross_studio_transfer', transferPayload);
+                sessionStorage.setItem('monu_pending_transfer', '1');
+            }
+        } catch (err) {
+            console.warn('Transfer persist warning:', err);
+        }
+        if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
+            MonuRouter.navigateTo('/document-studio?tool=' + destination);
+        } else {
+            window.location.href = '/document-studio?tool=' + destination;
+        }
+        return;
     }
 }
 window.sendEditorImageTo = sendEditorImageTo;
@@ -497,7 +593,11 @@ async function receiveCrossStudioTransfer(payload) {
             const converted = await crossItemToFile(payload.items[i], i);
             if (converted && converted.file) files.push(converted.file);
         }
-        switchTool('img2pdf', null);
+        if (typeof window.switchDocStudioTool === 'function' && document.getElementById('docStudioToolSwitch')) {
+            window.switchDocStudioTool('img2pdf');
+        } else {
+            switchTool('img2pdf', null);
+        }
         if (files.length) {
             await addFilesToImg2Pdf(files);
             showEditorStatus(`✅ Imported ${files.length} image${files.length !== 1 ? 's' : ''} from ${sourceLabel} into Images to PDF!`, 'ok');
@@ -511,7 +611,11 @@ async function receiveCrossStudioTransfer(payload) {
             const converted = await crossItemToFile(payload.items[i], i);
             if (converted && converted.file) files.push(converted.file);
         }
-        switchTool('pdfcompress', null);
+        if (typeof window.switchDocStudioTool === 'function' && document.getElementById('docStudioToolSwitch')) {
+            window.switchDocStudioTool('pdfcompress');
+        } else {
+            switchTool('pdfcompress', null);
+        }
         if (files.length) {
             await addFilesToPdfOptimizer(files);
             showEditorStatus(`✅ Imported ${files.length} page${files.length !== 1 ? 's' : ''} from ${sourceLabel} into PDF Optimizer!`, 'ok');
@@ -519,7 +623,7 @@ async function receiveCrossStudioTransfer(payload) {
         return;
     }
 
-    // Default: open in main Image & PDF Editor
+    // Default: open in main Image Editor
     const firstItem = payload.items[0];
     if (firstItem && firstItem.dataUrl) {
         TOOL = 'compress';
@@ -579,14 +683,14 @@ function openSendToMenu(sourceContext, triggerBtn) {
     let options = [];
     if (sourceContext === 'doc') {
         options = [
-            { icon: '🎨', title: 'Image & PDF Editor', sub: 'Compress KB size, resize, crop & adjust colors', action: () => window.sendStudioTo('doc', 'editor') },
+            { icon: '🎨', title: 'Image Editor', sub: 'Compress KB size, resize, crop & adjust colors', action: () => window.sendStudioTo('doc', 'editor') },
             { icon: '📸', title: 'Passport Photo Maker', sub: 'Crop passport size, remove background & print sheet', action: () => window.sendStudioTo('doc', 'passport') },
             { icon: '🖼️', title: 'Images to PDF Tool', sub: 'Send all scanned pages into PDF compiler', action: () => window.sendStudioTo('doc', 'img2pdf') },
             { icon: '🗜️', title: 'PDF Optimizer Tool', sub: 'Compress & optimize scanned pages into target KB PDF', action: () => window.sendStudioTo('doc', 'pdfcompress') }
         ];
     } else if (sourceContext === 'id') {
         options = [
-            { icon: '🎨', title: 'Image & PDF Editor', sub: 'Compress KB size, resize & adjust ID card colors', action: () => window.sendStudioTo('id', 'editor') },
+            { icon: '🎨', title: 'Image Editor', sub: 'Compress KB size, resize & adjust ID card colors', action: () => window.sendStudioTo('id', 'editor') },
             { icon: '📸', title: 'Passport Photo Maker', sub: 'Crop passport size, remove background & print sheet', action: () => window.sendStudioTo('id', 'passport') },
             { icon: '🖼️', title: 'Images to PDF Tool', sub: 'Convert ID card directly into PDF', action: () => window.sendStudioTo('id', 'img2pdf') },
             { icon: '🗜️', title: 'PDF Optimizer Tool', sub: 'Optimize ID card as target-KB PDF', action: () => window.sendStudioTo('id', 'pdfcompress') }
@@ -594,8 +698,8 @@ function openSendToMenu(sourceContext, triggerBtn) {
     } else {
         options = [
             { icon: '📸', title: 'Passport Photo Maker', sub: 'Crop passport size, remove background & print sheet', action: () => window.sendEditorImageTo('passport') },
-            { icon: '🖼️', title: 'Images to PDF Tool', sub: 'Add current image directly into PDF compiler', action: () => window.sendEditorImageTo('img2pdf') },
-            { icon: '🗜️', title: 'PDF Optimizer Tool', sub: 'Optimize current image directly to PDF', action: () => window.sendEditorImageTo('pdfcompress') },
+            { icon: '🖼️', title: 'Images to PDF Tool', sub: 'Send image to Document Studio → Images to PDF', action: () => window.sendEditorImageTo('img2pdf') },
+            { icon: '🗜️', title: 'PDF Optimizer Tool', sub: 'Send image to Document Studio → PDF Optimizer', action: () => window.sendEditorImageTo('pdfcompress') },
             { icon: '📄', title: 'Document Studio', sub: 'Send image to scanner & edge cropper', action: () => window.sendEditorImageTo('doc') }
         ];
     }
@@ -966,6 +1070,8 @@ function switchTool(id, btn) {
         }
         if (id === 'crop') initCropDisplay();
         if (id === 'brightness') resetBrightness();
+    } else if (!isStandalone && !IMG) {
+        updateImageInfoBar(null, null, '', null);
     }
 }
 
@@ -2810,6 +2916,7 @@ function renderImg2PdfList() {
         if (clearBtn) clearBtn.style.display = 'none';
         if (dragHint) dragHint.style.display = 'none';
         if (runBtn) runBtn.disabled = true;
+        updatePdfWorkspaceInfoBar('img2pdf');
         return;
     } else {
         if (dropZone) dropZone.style.display = 'none';
@@ -2916,6 +3023,7 @@ function selectImg2PdfActive(idx) {
     if (activeBadge && item) {
         activeBadge.textContent = `Page ${idx + 1} of ${img2pdfFiles.length} • ${item.name}${rot ? ' (' + rot + '°)' : ''}`;
     }
+    updatePdfWorkspaceInfoBar('img2pdf');
 }
 window.selectImg2PdfActive = selectImg2PdfActive;
 
@@ -3196,6 +3304,7 @@ async function addFilesToPdfOptimizer(files) {
 
                         for (let p = 1; p <= numPages; p++) {
                             const page = await pdfDoc.getPage(p);
+                            const vp1 = page.getViewport({ scale: 1.0 });
                             const vp = page.getViewport({ scale: 0.22 });
                             const canvas = document.createElement('canvas');
                             canvas.width = vp.width;
@@ -3211,10 +3320,13 @@ async function addFilesToPdfOptimizer(files) {
                                 type: 'pdf',
                                 sourceName: file.name,
                                 origBytes: bytesPerPage,
+                                width: Math.round(vp1.width),
+                                height: Math.round(vp1.height),
                                 thumbUrl: thumbUrl,
                                 pdfDoc: pdfDoc,
                                 pdfPageNum: p,
-                                totalPagesInDoc: numPages
+                                totalPagesInDoc: numPages,
+                                rotation: 0
                             });
                             addedCount++;
                         }
@@ -3245,8 +3357,11 @@ async function addFilesToPdfOptimizer(files) {
                             type: 'image',
                             sourceName: file.name,
                             origBytes: file.size,
+                            width: img.naturalWidth || img.width || 0,
+                            height: img.naturalHeight || img.height || 0,
                             thumbUrl: thumbUrl,
-                            imgElement: img
+                            imgElement: img,
+                            rotation: 0
                         });
                         addedCount++;
                     }
@@ -3303,6 +3418,7 @@ function renderPdfOptPages() {
         if (dlBtn) dlBtn.style.display = 'none';
         const estBar = document.getElementById('pdfEstimateBar');
         if (estBar) estBar.style.display = 'none';
+        updatePdfWorkspaceInfoBar('pdfcompress');
         return;
     }
 
@@ -3443,6 +3559,7 @@ async function selectPdfOptActive(idx) {
             activeImg.src = item.thumbUrl;
         }
     }
+    updatePdfWorkspaceInfoBar('pdfcompress');
 }
 window.selectPdfOptActive = selectPdfOptActive;
 
@@ -3726,3 +3843,75 @@ window.addEventListener('DOMContentLoaded', () => {
     // Hydrate any cross-studio transfer queued across multi-page navigation
     checkPendingCrossStudioTransfer();
 });
+
+// ═══ CONTEXT MENU HELPERS: RESET & CLEAR FOR EDITOR / PDF TOOLS ═══
+window.hasEditorToolWork = function(scopeTool) {
+    const t = scopeTool || TOOL;
+    if (t === 'img2pdf') return img2pdfFiles.length > 0;
+    if (t === 'pdfcompress') return pdfOptPages.length > 0 || !!PDF_RESULT;
+    return !!IMG;
+};
+
+window.resetActiveEditorTool = function(scopeTool) {
+    const t = scopeTool || TOOL;
+    if (t === 'img2pdf') {
+        img2pdfFiles.forEach(item => { item.rotation = 0; });
+        const ps = document.getElementById('i2pPageSize'); if (ps) ps.value = 'a4';
+        const or = document.getElementById('i2pOrientation'); if (or) or.value = 'auto';
+        const mg = document.getElementById('i2pMargin'); if (mg) mg.value = '0';
+        const q = document.getElementById('i2pQuality'); if (q) q.value = '0.92';
+        const pn = document.getElementById('i2pPageNum'); if (pn) pn.value = 'no';
+        const tv = document.getElementById('i2pTargetVal'); if (tv) tv.value = '';
+        const tu = document.getElementById('i2pTargetUnit'); if (tu) tu.value = 'KB';
+        const dp = document.getElementById('i2pDocProtection'); if (dp) dp.checked = true;
+        const st = document.getElementById('i2pStats'); if (st) st.style.display = 'none';
+        renderImg2PdfList();
+        showEditorStatus('↺ Images to PDF settings & rotations reset to defaults.', 'info');
+        return;
+    }
+    if (t === 'pdfcompress') {
+        pdfOptPages.forEach(item => { item.rotation = 0; });
+        PDF_RESULT = null;
+        const qp = document.getElementById('pdfQualPreset'); if (qp) qp.value = 'ebook';
+        const jq = document.getElementById('pdfJpegQual'); if (jq) jq.value = '0.75';
+        const tv = document.getElementById('pdfTargetVal'); if (tv) tv.value = '';
+        const tu = document.getElementById('pdfTargetUnit'); if (tu) tu.value = 'KB';
+        const idpi = document.getElementById('pdfIncDpi'); if (idpi) idpi.value = '300';
+        const ij = document.getElementById('pdfIncJpegQual'); if (ij) ij.value = '1.0';
+        const itv = document.getElementById('pdfIncTargetVal'); if (itv) itv.value = '';
+        const itu = document.getElementById('pdfIncTargetUnit'); if (itu) itu.value = 'KB';
+        const dp = document.getElementById('pdfDocProtection'); if (dp) dp.checked = true;
+        const rc = document.getElementById('pdfResultCard'); if (rc) rc.style.display = 'none';
+        const pw = document.getElementById('pdfProcessWrap'); if (pw) pw.style.display = 'none';
+        renderPdfOptPages();
+        updatePdfEstimate();
+        showEditorStatus('↺ PDF Optimizer settings & rotations reset to defaults.', 'info');
+        return;
+    }
+    if (IMG) {
+        resetEditorImage();
+    } else {
+        const tkb = document.getElementById('targetKB'); if (tkb) tkb.value = '';
+        const qs = document.getElementById('qualSlider'); if (qs) { qs.value = 80; const qv = document.getElementById('qualVal'); if (qv) qv.textContent = '80%'; }
+        const itkb = document.getElementById('targetIncKB'); if (itkb) itkb.value = '';
+        showEditorStatus('↺ Image Editor controls reset to initial state.', 'info');
+    }
+};
+
+window.clearActiveEditorWork = function(scopeTool) {
+    const t = scopeTool || TOOL;
+    if (t === 'img2pdf') {
+        clearImg2Pdf();
+        return;
+    }
+    if (t === 'pdfcompress') {
+        clearPdfOptPages();
+        return;
+    }
+    if (IMG) {
+        deleteEditorImage();
+    } else {
+        updateImageInfoBar(null, null, '', null);
+    }
+};
+

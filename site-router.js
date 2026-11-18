@@ -55,9 +55,9 @@
         },
         '/image-pdf-editor': {
             pageId: 'page-editor-studio',
-            title: 'Online Image Resizer in KB, Crop, Convert & PDF Organizer',
-            description: 'Resize & compress images in exact KB with 300 DPI for government forms. Crop, adjust color, watermark, convert formats, and organize or optimize PDFs online.',
-            keywords: 'resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, pdf organizer, pdf optimizer, images to pdf, adjust image brightness contrast',
+            title: 'Image Editor – Online Image Resizer in KB, Crop, Convert & Watermark',
+            description: 'Resize & compress images in exact KB with 300 DPI for government forms. Crop, adjust color, add watermarks, and convert formats online.',
+            keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, watermark photo',
             path: '/image-pdf-editor'
         },
         '/passport-photo-maker': {
@@ -118,6 +118,7 @@
     };
 
     let currentRoutePath = '/';
+    let _spaHistoryCount = 0;
 
     function normalizePath(pathname) {
         if (!pathname) return '/';
@@ -243,10 +244,17 @@
                 window.switchMode(mode);
             }
 
-            if (targetPath === '/image-pdf-editor' && requestedTool && typeof window.switchTool === 'function') {
-                const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'watermark', 'img2pdf', 'pdfcompress'];
+            if (targetPath === '/document-studio') {
+                const sub = (requestedTool === 'img2pdf' || requestedTool === 'pdfcompress') ? requestedTool : 'scanner';
+                if (typeof window.switchDocStudioTool === 'function') {
+                    window.switchDocStudioTool(sub);
+                }
+            } else if (targetPath === '/image-pdf-editor' && requestedTool && typeof window.switchTool === 'function') {
+                const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'watermark'];
                 if (validTools.includes(requestedTool)) {
                     window.switchTool(requestedTool);
+                } else {
+                    window.switchTool('compress');
                 }
             }
         }
@@ -287,8 +295,14 @@
 
     function navigateTo(url, push = true) {
         const { pathname, search, hash } = parseUrl(url);
-        const route = ROUTES[pathname] || ROUTES['/'];
         const requestedTool = search ? (new URLSearchParams(search).get('tool') || '') : '';
+
+        // Redirect legacy PDF query params on /image-pdf-editor cleanly into /document-studio
+        if (pathname === '/image-pdf-editor' && (requestedTool === 'img2pdf' || requestedTool === 'pdfcompress')) {
+            return navigateTo('/document-studio?tool=' + requestedTool, push);
+        }
+
+        const route = ROUTES[pathname] || ROUTES['/'];
 
         // Hide all page views
         const pages = document.querySelectorAll('.page-view');
@@ -323,6 +337,7 @@
         const fullTargetUrl = pathname + search + cleanTargetHash;
         if (push && (window.location.pathname + window.location.search + window.location.hash) !== fullTargetUrl) {
             window.history.pushState({ path: pathname, search: search, hash: cleanTargetHash }, route.title, fullTargetUrl);
+            _spaHistoryCount++;
         } else if (!push && (hash === '#explore-tools' || hash === '#explore-our-tools') && pathname === '/') {
             window.history.replaceState({ path: '/', search: '', hash: '' }, route.title, '/');
         }
@@ -612,6 +627,17 @@
         });
     }
 
+    function canGoBack() {
+        return _spaHistoryCount > 0 || (window.history && window.history.length > 1);
+    }
+
+    function goBack() {
+        if (!canGoBack()) return false;
+        if (_spaHistoryCount > 0) _spaHistoryCount--;
+        window.history.back();
+        return true;
+    }
+
     // Expose globals for onclick bindings in HTML
     window.navigateTo = navigateTo;
     window.MonuRouter = {
@@ -624,7 +650,9 @@
         promptClearAllData,
         closeClearDataModal,
         executeClearAllData,
-        refreshPrivacyStorageStats
+        refreshPrivacyStorageStats,
+        canGoBack,
+        goBack
     };
 
     if (document.readyState === 'loading') {

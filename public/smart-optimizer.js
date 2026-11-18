@@ -1011,7 +1011,7 @@
             const baseDim = pageDimMap[pageSize];
 
             // Render single candidate PDF pass from PRISTINE sources
-            async function buildCandidatePdf(quality, scaleFactor = 1.0) {
+            async function buildCandidatePdf(quality, scaleFactor = 1.0, extraPadBytes = 0) {
                 const effectiveDpi = baseDpi * scaleFactor;
                 const scale = effectiveDpi / 72;
                 let pdf = null;
@@ -1041,14 +1041,21 @@
                         ctx.fillRect(0, 0, rawCanvas.width, rawCanvas.height);
                         await page.render({ canvasContext: ctx, viewport: vp }).promise;
                     } else {
-                        // Image page from pristine imgElement
+                        // Image page from pristine imgElement (apply scaleFactor cleanly)
                         const im = item.imgElement;
-                        rawCanvas.width = im.naturalWidth || im.width;
-                        rawCanvas.height = im.naturalHeight || im.height;
+                        const natW = im.naturalWidth || im.width || 1;
+                        const natH = im.naturalHeight || im.height || 1;
+                        const imgScale = Math.max(0.1, Math.min(2.5, scaleFactor));
+                        const targetW = Math.max(1, Math.min(2500, Math.round(natW * imgScale)));
+                        const targetH = Math.max(1, Math.min(2500, Math.round(natH * imgScale)));
+                        rawCanvas.width = targetW;
+                        rawCanvas.height = targetH;
                         const ctx = rawCanvas.getContext('2d');
                         ctx.fillStyle = '#ffffff';
                         ctx.fillRect(0, 0, rawCanvas.width, rawCanvas.height);
-                        ctx.drawImage(im, 0, 0);
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(im, 0, 0, rawCanvas.width, rawCanvas.height);
                     }
 
                     // 2. Handle Rotation
@@ -1156,6 +1163,13 @@
                     }
                 }
 
+                if (pdf && extraPadBytes > 0) {
+                    const padCount = Math.max(0, Math.round(extraPadBytes));
+                    if (padCount > 0) {
+                        pdf.setProperties({ keywords: 'V'.repeat(padCount) });
+                    }
+                }
+
                 const buffer = pdf.output('arraybuffer');
                 return {
                     buffer,
@@ -1166,8 +1180,57 @@
                 };
             }
 
+            async function padPdfCandidateToTarget(candidate) {
+                if (!candidate || targetBytes <= 0 || candidate.byteLength >= targetBytes - 64) {
+                    return candidate;
+                }
+                try {
+                    // First try maximizing quality & gentle upscaling if natural output is still well below targetBytes
+                    let bestBase = candidate;
+                    if (bestBase.quality < 1.0 && bestBase.byteLength < targetBytes * 0.97) {
+                        const maxQCand = await buildCandidatePdf(1.0, bestBase.scaleFactor, 0);
+                        if (maxQCand.byteLength <= targetBytes) {
+                            bestBase = maxQCand;
+                        }
+                    }
+                    if (bestBase.byteLength < targetBytes * 0.97 && bestBase.scaleFactor < 1.5) {
+                        const hiResCand = await buildCandidatePdf(1.0, 1.5, 0);
+                        if (hiResCand.byteLength <= targetBytes && hiResCand.byteLength > bestBase.byteLength) {
+                            bestBase = hiResCand;
+                        }
+                    }
+                    if (bestBase.byteLength >= targetBytes - 64) {
+                        return bestBase;
+                    }
+
+                    const baseZero = bestBase;
+                    const deficit = Math.floor(targetBytes - baseZero.byteLength);
+                    if (deficit > 24) {
+                        if (onProgress) {
+                            onProgress({
+                                percent: 96,
+                                status: `Calibrating exact target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
+                            });
+                        }
+                        let padLen = Math.max(0, deficit - 14);
+                        let padded = await buildCandidatePdf(bestBase.quality, bestBase.scaleFactor, padLen);
+                        const residual = Math.floor(targetBytes - padded.byteLength);
+                        if (Math.abs(residual) > 4 && (padLen + residual) >= 0) {
+                            padded = await buildCandidatePdf(bestBase.quality, bestBase.scaleFactor, padLen + residual);
+                        }
+                        if (padded && Math.abs(padded.byteLength - targetBytes) < Math.abs(bestBase.byteLength - targetBytes)) {
+                            return padded;
+                        }
+                    }
+                    return bestBase;
+                } catch (padErr) {
+                    console.warn('PDF target size calibration warning:', padErr);
+                    return candidate;
+                }
+            }
+
             // Case A: No target KB specified => Single high-quality pass
-            if (targetBytes <= 0 || !isCompress) {
+            if (targetBytes <= 0) {
                 const result = await buildCandidatePdf(baseQuality, 1.0);
                 return {
                     buffer: result.buffer,
@@ -1185,61 +1248,69 @@
             }
 
             // Case B: Target KB Specified => FORCED PDF TARGET-SIZE OPTIMIZATION
-            // Priority 1: Reach requested PDF target size
-            // STAGE 1: Full-Resolution (scaleFactor = 1.0) search down to practical minimum quality
+            // Priority 1: Reach requested PDF target size (compress down or scale/calibrate up)
+            // STAGE 1: Full-Resolution (scaleFactor = 1.0) search
             let lo = 0.04;
-            let hi = baseQuality;
+            let hi = isCompress ? Math.max(baseQuality, 0.92) : 1.0;
             let bestBelowOrEqual = null;
             let closestCandidate = null;
 
-            for (let attempt = 0; attempt < 8; attempt++) {
-                const midQ = parseFloat(((lo + hi) / 2).toFixed(3));
-                if (onProgress) {
-                    onProgress({
-                        attempt: attempt + 1,
-                        maxAttempts: 8,
-                        percent: Math.round(((attempt + 1) / 8) * 100),
-                        status: `Optimization Pass ${attempt + 1}/8 (quality ${Math.round(midQ * 100)}%)…`
-                    });
+            // Quick probe at upper bound first so inputs smaller than targetBytes don't waste search iterations
+            const maxCand = await buildCandidatePdf(hi, 1.0);
+            closestCandidate = maxCand;
+            if (maxCand.byteLength <= targetBytes) {
+                bestBelowOrEqual = maxCand;
+            } else {
+                for (let attempt = 0; attempt < 8; attempt++) {
+                    const midQ = parseFloat(((lo + hi) / 2).toFixed(3));
+                    if (onProgress) {
+                        onProgress({
+                            attempt: attempt + 1,
+                            maxAttempts: 8,
+                            percent: Math.round(((attempt + 1) / 8) * 90),
+                            status: `Optimization Pass ${attempt + 1}/8 (quality ${Math.round(midQ * 100)}%)…`
+                        });
+                    }
+
+                    const candidate = await buildCandidatePdf(midQ, 1.0);
+
+                    if (!closestCandidate || Math.abs(candidate.byteLength - targetBytes) < Math.abs(closestCandidate.byteLength - targetBytes)) {
+                        closestCandidate = candidate;
+                    }
+
+                    if (candidate.byteLength <= targetBytes) {
+                        bestBelowOrEqual = candidate;
+                        lo = midQ + 0.02; // try closer to target
+                    } else {
+                        hi = midQ - 0.02;
+                    }
+
+                    // If within 2% of target, stop early
+                    if (Math.abs(candidate.byteLength - targetBytes) / targetBytes <= 0.02) {
+                        bestBelowOrEqual = candidate;
+                        break;
+                    }
+
+                    if (lo > hi) break;
                 }
-
-                const candidate = await buildCandidatePdf(midQ, 1.0);
-
-                if (!closestCandidate || Math.abs(candidate.byteLength - targetBytes) < Math.abs(closestCandidate.byteLength - targetBytes)) {
-                    closestCandidate = candidate;
-                }
-
-                if (candidate.byteLength <= targetBytes) {
-                    bestBelowOrEqual = candidate;
-                    lo = midQ + 0.02; // try closer to target
-                } else {
-                    hi = midQ - 0.02;
-                }
-
-                // If within 4% of target, stop early
-                if (Math.abs(candidate.byteLength - targetBytes) / targetBytes <= 0.04) {
-                    bestBelowOrEqual = candidate;
-                    break;
-                }
-
-                if (lo > hi) break;
             }
 
             if (bestBelowOrEqual) {
-                const diffPct = Math.abs((bestBelowOrEqual.byteLength - targetBytes) / targetBytes);
-                const isExact = diffPct <= 0.06 || bestBelowOrEqual.byteLength <= targetBytes;
+                const calibrated = await padPdfCandidateToTarget(bestBelowOrEqual);
+                const diffPct = Math.abs((calibrated.byteLength - targetBytes) / targetBytes);
+                const isExact = diffPct <= 0.05 || calibrated.byteLength <= targetBytes;
                 return {
-                    buffer: bestBelowOrEqual.buffer,
-                    actualBytes: bestBelowOrEqual.byteLength,
-                    actualKB: bestBelowOrEqual.kb,
+                    buffer: calibrated.buffer,
+                    actualBytes: calibrated.byteLength,
+                    actualKB: calibrated.kb,
                     targetKB,
-                    qualityUsed: bestBelowOrEqual.quality,
+                    qualityUsed: calibrated.quality,
                     targetReached: true,
                     nearTarget: !isExact,
                     qualityProtected: false,
                     bestSafeResult: false,
                     status: 'reached',
-                    statusMessage: `Target Reached (${bestBelowOrEqual.kb >= 1024 ? (bestBelowOrEqual.kb / 1024).toFixed(2) + ' MB' : bestBelowOrEqual.kb.toFixed(0) + ' KB'})`
+                    statusMessage: `Target Reached (${calibrated.kb >= 1024 ? (calibrated.kb / 1024).toFixed(2) + ' MB' : calibrated.kb.toFixed(0) + ' KB'})`
                 };
             }
 
@@ -1271,7 +1342,7 @@
                     onProgress({
                         attempt: idx + 1,
                         maxAttempts: pdfScaleSteps.length,
-                        percent: Math.round(((idx + 1) / pdfScaleSteps.length) * 100),
+                        percent: Math.round(((idx + 1) / pdfScaleSteps.length) * 90),
                         status: `Downsampling Resolution Pass ${idx + 1}/${pdfScaleSteps.length} (scale ${Math.round(scale * 100)}%)…`
                     });
                 }
@@ -1298,7 +1369,7 @@
                 }
             }
 
-            const finalPick = stage2Winner || closestCandidate;
+            const finalPick = stage2Winner ? await padPdfCandidateToTarget(stage2Winner) : closestCandidate;
             const reached = finalPick.byteLength <= targetBytes || (Math.abs(finalPick.byteLength - targetBytes) / targetBytes) <= 0.08;
 
             return {

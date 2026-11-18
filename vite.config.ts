@@ -36,6 +36,7 @@ export default defineConfig(() => {
           'passport-maker.js',
           'videos-config.js',
           'tutorial-videos.js',
+          'context-menu.js',
           'style.css'
         ],
         manifest: {

@@ -41,7 +41,7 @@ window.SMARTVLE_TUTORIAL_VIDEOS = [
   },
   {
     id: 'image-editing-tools',
-    badge: 'Image & PDF Editor',
+    badge: 'Image Editor',
     theme: 'editor',
     title: 'Image Editing Tools Tutorial',
     description: 'Learn how to resize, compress, convert and edit images using our online tools.',
@@ -49,6 +49,6 @@ window.SMARTVLE_TUTORIAL_VIDEOS = [
     src: '/videos/image-editing-tools.mp4',
     poster: '/videos/image-editing-tools-poster.jpg',
     toolUrl: '/image-pdf-editor',
-    toolLabel: 'Open Image & PDF Editor ➔'
+    toolLabel: 'Open Image Editor ➔'
   }
 ];

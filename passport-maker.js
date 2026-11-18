@@ -1814,7 +1814,7 @@
     }
 
     /**
-     * 11. Send To Menu (matching Image & PDF Editor popover style)
+     * 11. Send To Menu (matching Image Editor popover style)
      */
     async function sendPassportToTargetTool(targetTool) {
         if (!passImg) {
@@ -1823,20 +1823,39 @@
         }
         const photoCanvas = getHighResBorderlessPhotoCanvas();
         const dataUrl = photoCanvas.toDataURL('image/jpeg', 0.98);
+        const tool = targetTool || 'compress';
+        const isPdfTarget = (tool === 'img2pdf' || tool === 'pdfcompress');
+        const targetRoute = isPdfTarget ? ('/document-studio?tool=' + tool) : '/image-pdf-editor';
         const payload = {
             source: 'Passport Photo Maker',
-            targetTool: targetTool || 'compress',
+            targetTool: tool,
             items: [{ dataUrl, name: 'passport_photo.jpg' }],
             timestamp: Date.now()
         };
 
-        const hasSpaEditor = !!document.getElementById('page-editor-studio') && typeof window.receiveCrossStudioTransfer === 'function';
-        if (hasSpaEditor) {
-            if (window.MonuRouter && window.MonuRouter.navigateTo) {
-                window.MonuRouter.navigateTo('/image-pdf-editor');
+        if (isPdfTarget) {
+            const hasSpaDoc = (!!document.getElementById('page-doc-studio') || !!document.getElementById('docStudioToolSwitch')) && typeof window.receiveCrossStudioTransfer === 'function';
+            if (hasSpaDoc) {
+                if (window.MonuRouter && window.MonuRouter.navigateTo) {
+                    window.MonuRouter.navigateTo(targetRoute);
+                } else if (typeof window.switchMode === 'function') {
+                    window.switchMode('DOC');
+                }
+                if (typeof window.switchDocStudioTool === 'function') {
+                    window.switchDocStudioTool(tool);
+                }
+                await window.receiveCrossStudioTransfer(payload);
+                return;
             }
-            await window.receiveCrossStudioTransfer(payload);
-            return;
+        } else {
+            const hasSpaEditor = !!document.getElementById('page-editor-studio') && typeof window.receiveCrossStudioTransfer === 'function';
+            if (hasSpaEditor) {
+                if (window.MonuRouter && window.MonuRouter.navigateTo) {
+                    window.MonuRouter.navigateTo('/image-pdf-editor');
+                }
+                await window.receiveCrossStudioTransfer(payload);
+                return;
+            }
         }
 
         try {
@@ -1846,9 +1865,9 @@
             console.warn(e);
         }
         if (window.MonuRouter && window.MonuRouter.navigateTo) {
-            window.MonuRouter.navigateTo('/image-pdf-editor');
+            window.MonuRouter.navigateTo(targetRoute);
         } else {
-            window.location.href = '/image-pdf-editor';
+            window.location.href = targetRoute;
         }
     }
 
@@ -1875,8 +1894,8 @@
         }
 
         const options = [
-            { icon: '🖼️', title: 'Image & PDF Editor', sub: 'Compress KB size, resize, watermark & convert format', action: sendPassportToImageEditor },
-            { icon: '📄', title: 'Images to PDF Tool', sub: 'Compile passport photo directly into PDF', action: sendPassportToPdf },
+            { icon: '🖼️', title: 'Image Editor', sub: 'Compress KB size, resize, watermark & convert format', action: sendPassportToImageEditor },
+            { icon: '📄', title: 'Images to PDF Tool', sub: 'Compile passport photo inside Document Studio PDF compiler', action: sendPassportToPdf },
             { icon: '📑', title: 'Download Print Sheet (PDF)', sub: 'Export exact-size A4 / 4×6 PDF for printing', action: () => downloadPassportPrintPdf() }
         ];
 
@@ -2029,6 +2048,8 @@
     window.sendPassportToPdf = sendPassportToPdf;
     window.openPassportSendToMenu = openPassportSendToMenu;
     window.resetPassportMaker = resetPassportMaker;
+    window.hasPassportWork = function() { return !!passImg; };
+    window.clearPassportWork = resetPassportMaker;
     window.renderPassportCanvas = renderPassportCanvas;
 
     // Initialize drag-and-drop upload, canvas pointer pan & static preview resize handling

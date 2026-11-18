@@ -1,9 +1,9 @@
 /**
  * SMART VLE TOOL - Offline Service Worker
- * Complete offline caching for Document Studio, ID Card Studio, Image & PDF Editor
+ * Complete offline caching for Document Studio, ID Card Studio, Image Editor & Passport Photo Maker
  */
 
-const CACHE_NAME = 'monu-offline-v2.7';
+const CACHE_NAME = 'monu-offline-v2.8';
 
 const PRECACHE_URLS = [
   '/',
@@ -39,6 +39,7 @@ const PRECACHE_URLS = [
   '/site-router.js',
   '/videos-config.js',
   '/tutorial-videos.js',
+  '/context-menu.js',
   '/pwa-controller.js',
   '/manifest.webmanifest',
   '/icon.svg',

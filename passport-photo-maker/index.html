@@ -30,7 +30,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=20261117d">
+    <link rel="stylesheet" href="/style.css?v=20261118a">
 </head>
 <body>
 <div class="dashboard">
@@ -51,7 +51,7 @@
                     <li><a href="/" class="site-nav-link" data-link>Home</a></li>
                     <li><a href="/document-studio" class="site-nav-link" data-link>Document Studio</a></li>
                     <li><a href="/id-card-studio" class="site-nav-link" data-link>ID Card Studio</a></li>
-                    <li><a href="/image-pdf-editor" class="site-nav-link" data-link>Image & PDF Editor</a></li>
+                    <li><a href="/image-pdf-editor" class="site-nav-link" data-link>Image Editor</a></li>
                     <li><a href="/passport-photo-maker" class="site-nav-link active" data-link>Passport Photo Maker</a></li>
                     <li><a href="/about-us" class="site-nav-link" data-link>About Us</a></li>
                     <li><a href="/contact-us" class="site-nav-link" data-link>Contact Us</a></li>
@@ -67,7 +67,7 @@
             <a href="/" class="site-nav-link" data-link>🏠 Home</a>
             <a href="/document-studio" class="site-nav-link" data-link>📄 Document Studio</a>
             <a href="/id-card-studio" class="site-nav-link" data-link>🪪 ID Card Studio</a>
-            <a href="/image-pdf-editor" class="site-nav-link" data-link>🖼️ Image & PDF Editor</a>
+            <a href="/image-pdf-editor" class="site-nav-link" data-link>🖼️ Image Editor</a>
             <a href="/passport-photo-maker" class="site-nav-link active" data-link>📸 Passport Photo Maker</a>
             <a href="/about-us" class="site-nav-link" data-link>ℹ️ About Us</a>
             <a href="/contact-us" class="site-nav-link" data-link>✉️ Contact Us</a>
@@ -386,6 +386,105 @@
                     </div>
                 </div>
 
+                <!-- Section: Technical Overview -->
+                <section class="section-wrapper bg-light" id="passport-technical-overview">
+                    <div class="container-wide">
+                        <div class="section-header">
+                            <span class="section-tag">Technical Overview</span>
+                            <h2 class="section-title">Everything About Passport Photo Maker</h2>
+                            <p class="section-subtitle">Comprehensive guide to passport photo dimensions, background removal, tone &amp; color calibration, and printable sheet layouts.</p>
+                        </div>
+
+                        <div class="tool-info-grid">
+                            <div class="tool-info-card full-width">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">🪪</span>
+                                    <h4>What This Tool Does</h4>
+                                </div>
+                                <p>
+                                    Passport Photo Maker is a client-side portrait studio engineered to crop, clean, retouch, and arrange passport, visa, stamp, and ID photographs directly inside your browser. It maintains a full-resolution master bitmap pipeline decoupled from physical print millimeters, supports in-browser portrait background removal with studio preset or custom backdrop colors, offers subject-only tone and RGB/CMY color balance sliders, and generates calibrated A4 and 4 × 6 inch print sheets with optional cut lines.
+                                </p>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">⭐</span>
+                                    <h4>Main Features</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Size Presets &amp; Custom Units:</strong> Instant presets for 3.5 × 4.5 cm (Standard), 2 × 2 inch (US Visa), 3 × 4 cm (Stamp Size), and 2.5 × 3.5 cm (PAN / Mini), plus custom dimensions in cm, mm, inch, or px @ 300 DPI.</li>
+                                    <li><strong>Framing &amp; Alignment Controls:</strong> Smooth Crop Zoom (80%–250%), drag-to-pan framing with Lock Image Drag, ±90° rotation, horizontal flip, and 1-click Center Fit.</li>
+                                    <li><strong>Background Removal &amp; Studio Colors:</strong> Client-side portrait segmentation with Restore Original fallback, preset backdrops (Light Slate, White, Sky Blue, Beige / Cream), and a Custom Studio Color picker.</li>
+                                    <li><strong>Tone &amp; Color Calibration:</strong> Separate Tone &amp; Exposure sliders (Brightness, Contrast, Midtones / Gamma 0.40–2.20) and Cyan–Red, Magenta–Green, Yellow–Blue color balance controls.</li>
+                                    <li><strong>Print Sheet Modal &amp; Exports:</strong> A4 and 4 × 6 inch sheet preview with Photo Size scale (-50 to +50), Photo Gap, Photo Border, optional Crop Gap &amp; Dashed/Plain Crop Line, JPG/PDF sheet download, and Send To tool integration.</li>
+                                </ul>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">✨</span>
+                                    <h4>Key Benefits</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Print-Ready Physical Accuracy:</strong> Outputs exact 300 DPI pixel dimensions and calibrated millimeter spacing for A4 and 4 × 6 photo paper.</li>
+                                    <li><strong>Zero Cloud Uploads:</strong> Personal portraits stay strictly inside your local browser memory without external server transmission.</li>
+                                    <li><strong>Full-Resolution Master Quality:</strong> Small physical print sizes never downsample your live editing canvas, keeping facial details crisp.</li>
+                                    <li><strong>Direct Portal &amp; Studio Bridge:</strong> Send any finished passport photo directly to Image &amp; PDF Editor for exact KB compression or Images to PDF compiling.</li>
+                                </ul>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">📁</span>
+                                    <h4>Supported File Types &amp; Outputs</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Input Portraits:</strong> JPEG (.jpg, .jpeg), PNG (.png), WEBP (.webp), and browser-supported photo formats.</li>
+                                    <li><strong>Single Photo Export:</strong> High-resolution JPEG cropped and scaled to your selected 300 DPI dimensions (e.g., 413 × 531 px for 3.5 × 4.5 cm).</li>
+                                    <li><strong>Print Sheet Export:</strong> Calibrated A4 (210 × 297 mm) or 4 × 6 inch print-ready JPG, vector PDF sheet, and direct browser print layout.</li>
+                                </ul>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">💼</span>
+                                    <h4>Practical Applications</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Passport, Visa &amp; Travel Applications:</strong> Generating 3.5 × 4.5 cm and 2 × 2 inch compliant photos on clean white or light studio backgrounds.</li>
+                                    <li><strong>CSC / VLE &amp; Print Shops:</strong> Packing 1 to 100 photos neatly onto A4 or 4 × 6 glossy sheets with configurable gap, border, and cut guides.</li>
+                                    <li><strong>Exam, Job &amp; PAN Submissions:</strong> Preparing 2.5 × 3.5 cm PAN or 3 × 4 cm stamp portraits and transferring to Image &amp; PDF Editor for strict KB sizing.</li>
+                                    <li><strong>Institutional ID Portraits:</strong> Standardizing uniform background tones across student badges and employee credentials.</li>
+                                </ul>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">💡</span>
+                                    <h4>Useful Tips for Best Results</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Use Even Front Lighting:</strong> Capture portraits facing soft daylight against a contrasting wall for the cleanest background cutout edges.</li>
+                                    <li><strong>Lock Drag After Framing:</strong> Position head and shoulders with Crop Zoom and drag, then tick "Lock Image Drag" to prevent accidental shifts.</li>
+                                    <li><strong>Print at 100% / Actual Size:</strong> Disable "Fit to Page" in your printer dialog so physical photo dimensions match a ruler accurately.</li>
+                                    <li><strong>Fine-Tune Print Sheet Spacing:</strong> Use the Print Preview modal's Photo Size slider (-50 to +50), Photo Gap, and optional Crop Line toggle to maximize photos per sheet.</li>
+                                </ul>
+                            </div>
+
+                            <div class="tool-info-card">
+                                <div class="tool-info-card-header">
+                                    <span class="tool-info-card-icon">⚠️</span>
+                                    <h4>Technical Limitations</h4>
+                                </div>
+                                <ul>
+                                    <li><strong>Complex Edges &amp; Matching Tones:</strong> Fine loose hair or clothing matching the original backdrop tone may leave minor edge halos during automatic segmentation.</li>
+                                    <li><strong>Original Photo Sharpness:</strong> Heavily blurred or very low-resolution portraits cannot be enhanced beyond the detail present in the source file.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </div>
 
             <aside class="side-ad-space right-ad" aria-label="Advertisement">
@@ -419,7 +518,7 @@
                     <ul class="footer-nav-list">
                         <li><a href="/document-studio" class="footer-link" data-link>Document Studio</a></li>
                         <li><a href="/id-card-studio" class="footer-link" data-link>ID Card Studio</a></li>
-                        <li><a href="/image-pdf-editor" class="footer-link" data-link>Image & PDF Editor</a></li>
+                        <li><a href="/image-pdf-editor" class="footer-link" data-link>Image Editor</a></li>
                         <li><a href="/passport-photo-maker" class="footer-link" data-link>Passport Photo Maker</a></li>
                     </ul>
                 </div>
@@ -511,8 +610,9 @@
 
 <!-- Passport Photo Maker Script loader -->
 <script src="/assets/aistudio/bk_remove_js_ec9f57e0.js"></script>
-<script src="/passport-maker.js?v=20261117a"></script>
-<script src="/site-router.js?v=20261117d"></script>
+<script src="/passport-maker.js?v=20261118a"></script>
+<script src="/site-router.js?v=20261118a"></script>
 <script src="/pwa-controller.js"></script>
+<script src="/context-menu.js?v=20261118a"></script>
 </body>
 </html>

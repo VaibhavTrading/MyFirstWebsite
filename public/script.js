@@ -11,6 +11,7 @@ let activeBucketIdx = -1;
 let activeIndex = -1; 
 let activeHandle = null; 
 let currentMode = 'DOC';
+let docStudioActiveSubTool = 'scanner';
 let cvReady = false; 
 let liveTransformFrame = null; 
 let transformTimer = null;
@@ -804,16 +805,26 @@ function switchMode(mode) {
     const tabEditor = document.getElementById('tab-editor');
     const enhancerWs = document.getElementById('enhancer-main-workspace');
     const editorWs = document.getElementById('editor-main-workspace');
+    const docSwitchBar = document.getElementById('docStudioToolSwitch');
 
     if (mode === 'DOC') {
         if (tabDoc) tabDoc.className = 'mode-tab active'; 
         if (tabId) tabId.className = 'mode-tab';
         if (tabEditor) tabEditor.className = 'mode-tab';
+        if (docSwitchBar) docSwitchBar.style.display = 'flex';
         if (enhancerWs) {
-            enhancerWs.style.display = 'grid';
+            enhancerWs.style.display = (docStudioActiveSubTool === 'img2pdf' || docStudioActiveSubTool === 'pdfcompress') ? 'none' : 'grid';
             enhancerWs.classList.remove('id-mode');
         }
-        if (editorWs) editorWs.style.display = 'none';
+        if (editorWs) {
+            if (docStudioActiveSubTool === 'img2pdf' || docStudioActiveSubTool === 'pdfcompress') {
+                editorWs.classList.add('doc-subtool-hosted');
+                editorWs.style.display = 'flex';
+            } else {
+                editorWs.classList.remove('doc-subtool-hosted');
+                editorWs.style.display = 'none';
+            }
+        }
 
         document.getElementById('side-selector-container').style.display = 'none'; 
         document.getElementById('export-doc-section').style.display = 'block';
@@ -861,7 +872,7 @@ function switchMode(mode) {
 
         const btnSr = document.getElementById('btn-shadow-removal');
         if (btnSr) {
-            btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+            btnSr.innerText = `Shadow: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
             btnSr.classList.toggle('active', shadowRemovalActive);
         }
         setFilterMode(filterMode);
@@ -915,11 +926,15 @@ function switchMode(mode) {
         if (tabDoc) tabDoc.className = 'mode-tab'; 
         if (tabId) tabId.className = 'mode-tab active';
         if (tabEditor) tabEditor.className = 'mode-tab';
+        if (docSwitchBar) docSwitchBar.style.display = 'none';
         if (enhancerWs) {
             enhancerWs.style.display = 'grid';
             enhancerWs.classList.add('id-mode');
         }
-        if (editorWs) editorWs.style.display = 'none';
+        if (editorWs) {
+            editorWs.classList.remove('doc-subtool-hosted');
+            editorWs.style.display = 'none';
+        }
 
         document.getElementById('side-selector-container').style.display = 'grid'; 
         document.getElementById('export-doc-section').style.display = 'none';
@@ -977,7 +992,7 @@ function switchMode(mode) {
 
         const btnSr = document.getElementById('btn-shadow-removal');
         if (btnSr) {
-            btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+            btnSr.innerText = `Shadow: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
             btnSr.classList.toggle('active', shadowRemovalActive);
         }
         setFilterMode(filterMode);
@@ -1021,10 +1036,64 @@ function switchMode(mode) {
         if (tabDoc) tabDoc.className = 'mode-tab'; 
         if (tabId) tabId.className = 'mode-tab';
         if (tabEditor) tabEditor.className = 'mode-tab active';
+        if (docSwitchBar) docSwitchBar.style.display = 'none';
         if (enhancerWs) enhancerWs.style.display = 'none';
-        if (editorWs) editorWs.style.display = 'flex';
+        if (editorWs) {
+            editorWs.classList.remove('doc-subtool-hosted');
+            editorWs.style.display = 'flex';
+        }
+        if (typeof window.switchTool === 'function' && (typeof window.TOOL === 'undefined' || window.TOOL === 'img2pdf' || window.TOOL === 'pdfcompress')) {
+            // Keep Image Editor strictly on image utilities when PDF tools are hosted inside Document Studio
+            try {
+                if (typeof TOOL !== 'undefined' && (TOOL === 'img2pdf' || TOOL === 'pdfcompress')) {
+                    window.switchTool('compress', null);
+                }
+            } catch (e) {}
+        }
     }
 }
+
+window.switchDocStudioTool = function(subTool, triggerBtn) {
+    const normalized = (subTool === 'img2pdf' || subTool === 'pdfcompress') ? subTool : 'scanner';
+    docStudioActiveSubTool = normalized;
+    window._docStudioActiveSubTool = normalized;
+
+    const docSwitchBar = document.getElementById('docStudioToolSwitch');
+    if (docSwitchBar) {
+        docSwitchBar.style.display = (currentMode === 'DOC') ? 'flex' : 'none';
+        docSwitchBar.querySelectorAll('.doc-tool-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.getAttribute('data-doc-tool') === normalized || tab === triggerBtn);
+        });
+    }
+
+    const enhancerWs = document.getElementById('enhancer-main-workspace');
+    const editorWs = document.getElementById('editor-main-workspace');
+
+    if (currentMode !== 'DOC') {
+        if (normalized === 'scanner') return;
+        switchMode('DOC');
+    }
+
+    if (normalized === 'scanner') {
+        if (enhancerWs) {
+            enhancerWs.style.display = 'grid';
+            enhancerWs.classList.remove('id-mode');
+        }
+        if (editorWs) {
+            editorWs.classList.remove('doc-subtool-hosted');
+            editorWs.style.display = 'none';
+        }
+    } else {
+        if (enhancerWs) enhancerWs.style.display = 'none';
+        if (editorWs) {
+            editorWs.classList.add('doc-subtool-hosted');
+            editorWs.style.display = 'flex';
+        }
+        if (typeof window.switchTool === 'function') {
+            window.switchTool(normalized, null);
+        }
+    }
+};
 
 function getOrGenerateCroppedCanvas() {
     if (tempCurrentCroppedCanvas) return tempCurrentCroppedCanvas;
@@ -1467,7 +1536,7 @@ function setActiveImage(idx) {
     shadowRemovalActive = !!imgObj.shadowRemoval;
     let btnSr = document.getElementById('btn-shadow-removal');
     if(btnSr) {
-        btnSr.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+        btnSr.innerText = `Shadow: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
         btnSr.classList.toggle('active', shadowRemovalActive);
     }
     setFilterMode(imgObj.filterMode || 'GRAYSCALE');
@@ -1679,7 +1748,7 @@ function toggleShadowRemoval() {
     shadowRemovalActive = !shadowRemovalActive;
     let btn = document.getElementById('btn-shadow-removal');
     if(btn) {
-        btn.innerText = `Shadow Remove: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
+        btn.innerText = `Shadow: ${shadowRemovalActive ? 'ON' : 'OFF'}`;
         btn.classList.toggle('active', shadowRemovalActive);
     }
     if (activeIndex !== -1 && imageArray[activeIndex]) {
@@ -2752,6 +2821,131 @@ window.MonuStorageManager = {
         }
         return { docCount, idSetCount, editorProjectCount };
     },
+    async getDetailedStorageSummary() {
+        const base = await this.getStorageSummary();
+        let prefKeys = [];
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && (/^(smartvle|monu|svt|passport|doc|idcard|editor)/i.test(k))) {
+                    prefKeys.push(k);
+                }
+            }
+        } catch (e) {}
+        return {
+            docCount: base.docCount || 0,
+            idSetCount: base.idSetCount || 0,
+            editorProjectCount: base.editorProjectCount || 0,
+            prefCount: prefKeys.length
+        };
+    },
+    async clearSelectedData(opts) {
+        const cfg = opts || {};
+        const cleared = [];
+        const failures = [];
+
+        if (cfg.docSession) {
+            try {
+                if (window.DocIDStudioDB) {
+                    const db = await window.DocIDStudioDB.init();
+                    await new Promise((res, rej) => {
+                        const tx = db.transaction('documentData', 'readwrite');
+                        tx.objectStore('documentData').clear();
+                        tx.oncomplete = res;
+                        tx.onerror = (e) => rej(e.target.error);
+                    });
+                }
+                if (typeof docStudioState !== 'undefined') {
+                    docStudioState.activeIndex = -1;
+                    docStudioState.corners = null;
+                    docStudioState.tempCurrentCroppedCanvas = null;
+                }
+                if (currentMode === 'DOC' && typeof clearActiveDocOrIdWork === 'function') {
+                    clearActiveDocOrIdWork('DOC');
+                }
+                cleared.push('Document Studio saved session');
+            } catch (e) {
+                failures.push('Document Studio storage');
+            }
+        }
+
+        if (cfg.idSets) {
+            try {
+                if (window.DocIDStudioDB) {
+                    const db = await window.DocIDStudioDB.init();
+                    await new Promise((res, rej) => {
+                        const tx = db.transaction('idCardData', 'readwrite');
+                        tx.objectStore('idCardData').clear();
+                        tx.oncomplete = res;
+                        tx.onerror = (e) => rej(e.target.error);
+                    });
+                }
+                bucketPairs = [];
+                activeBucketIdx = -1;
+                idLeftCanvas = null;
+                idRightCanvas = null;
+                if (typeof idStudioState !== 'undefined') {
+                    idStudioState.activeIndex = -1;
+                    idStudioState.bucketPairs = [];
+                    idStudioState.activeBucketIdx = -1;
+                    idStudioState.idLeftCanvas = null;
+                    idStudioState.idRightCanvas = null;
+                }
+                if (typeof rebuildBucketDOM === 'function') rebuildBucketDOM();
+                if (currentMode === 'ID' && typeof clearActiveDocOrIdWork === 'function') {
+                    clearActiveDocOrIdWork('ID');
+                }
+                cleared.push('ID Card Studio saved sets & session');
+            } catch (e) {
+                failures.push('ID Card Studio storage');
+            }
+        }
+
+        if (cfg.editorProjects) {
+            try {
+                if (window.ImagePDFEditorDB) {
+                    const db = await window.ImagePDFEditorDB.init();
+                    await new Promise((res, rej) => {
+                        const tx = db.transaction('editorProjects', 'readwrite');
+                        tx.objectStore('editorProjects').clear();
+                        tx.oncomplete = res;
+                        tx.onerror = (e) => rej(e.target.error);
+                    });
+                }
+                cleared.push('Image Editor saved items');
+            } catch (e) {
+                failures.push('Image Editor storage');
+            }
+        }
+
+        if (cfg.preferences) {
+            try {
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && /^(smartvle|monu|svt|passport|doc|idcard|editor)/i.test(k)) {
+                        toRemove.push(k);
+                    }
+                }
+                toRemove.forEach(k => localStorage.removeItem(k));
+                const sessRemove = [];
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const k = sessionStorage.key(i);
+                    if (k && /^(smartvle|monu|svt)/i.test(k)) sessRemove.push(k);
+                }
+                sessRemove.forEach(k => sessionStorage.removeItem(k));
+                cleared.push('Saved preferences');
+            } catch (e) {
+                failures.push('Website preferences');
+            }
+        }
+
+        return {
+            success: failures.length === 0,
+            cleared,
+            failures
+        };
+    },
     async clearAllData() {
         const failures = [];
 
@@ -3038,6 +3232,8 @@ async function sendStudioTo(studioType, destination) {
     const targetTool = destination === 'img2pdf'
         ? 'img2pdf'
         : (destination === 'pdfcompress' ? 'pdfcompress' : 'compress');
+    const isPdfTarget = (targetTool === 'img2pdf' || targetTool === 'pdfcompress');
+    const targetRoute = isPdfTarget ? ('/document-studio?tool=' + targetTool) : '/image-pdf-editor';
     const payload = {
         source: sourceLabel,
         targetTool,
@@ -3045,15 +3241,31 @@ async function sendStudioTo(studioType, destination) {
         timestamp: Date.now()
     };
 
-    const hasSpaEditor = !!document.getElementById('page-editor-studio');
-    if (hasSpaEditor && typeof window.receiveCrossStudioTransfer === 'function') {
-        if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-            MonuRouter.navigateTo('/image-pdf-editor');
-        } else if (typeof switchMode === 'function') {
-            switchMode('EDITOR');
+    if (isPdfTarget) {
+        const hasSpaDoc = !!document.getElementById('page-doc-studio') || !!document.getElementById('docStudioToolSwitch');
+        if (hasSpaDoc && typeof window.receiveCrossStudioTransfer === 'function') {
+            if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
+                MonuRouter.navigateTo(targetRoute);
+            } else if (typeof switchMode === 'function') {
+                switchMode('DOC');
+            }
+            if (typeof window.switchDocStudioTool === 'function') {
+                window.switchDocStudioTool(targetTool);
+            }
+            await window.receiveCrossStudioTransfer(payload);
+            return;
         }
-        await window.receiveCrossStudioTransfer(payload);
-        return;
+    } else {
+        const hasSpaEditor = !!document.getElementById('page-editor-studio');
+        if (hasSpaEditor && typeof window.receiveCrossStudioTransfer === 'function') {
+            if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
+                MonuRouter.navigateTo('/image-pdf-editor');
+            } else if (typeof switchMode === 'function') {
+                switchMode('EDITOR');
+            }
+            await window.receiveCrossStudioTransfer(payload);
+            return;
+        }
     }
 
     // Multi-page route transition: persist transfer safely in IndexedDB before reload
@@ -3067,11 +3279,135 @@ async function sendStudioTo(studioType, destination) {
     }
 
     if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-        MonuRouter.navigateTo('/image-pdf-editor');
+        MonuRouter.navigateTo(targetRoute);
     } else {
-        window.location.href = '/image-pdf-editor';
+        window.location.href = targetRoute;
     }
 }
 window.sendStudioTo = sendStudioTo;
+
+// ═══ CONTEXT MENU HELPERS: DOC & ID STUDIO RESET / CLEAR ═══
+window.hasDocOrIdWork = function(mode) {
+    const m = mode || currentMode;
+    if (m === 'DOC') {
+        if (docStudioActiveSubTool === 'img2pdf' || docStudioActiveSubTool === 'pdfcompress') {
+            return typeof window.hasEditorToolWork === 'function' ? window.hasEditorToolWork(docStudioActiveSubTool) : false;
+        }
+        return Array.isArray(imageArray) && imageArray.length > 0;
+    }
+    if (m === 'ID') {
+        return (Array.isArray(imageArray) && imageArray.length > 0) || !!idLeftCanvas || !!idRightCanvas;
+    }
+    return false;
+};
+
+window.resetActiveDocOrIdTool = function(mode) {
+    const m = mode || currentMode;
+    if (m === 'DOC' && (docStudioActiveSubTool === 'img2pdf' || docStudioActiveSubTool === 'pdfcompress')) {
+        if (typeof window.resetActiveEditorTool === 'function') {
+            window.resetActiveEditorTool(docStudioActiveSubTool);
+        }
+        return;
+    }
+    // Reset current sliders, filter, shadow, rotation, zoom, pan, and quad corners
+    const sc = document.getElementById('slider-contrast'); if (sc) sc.value = 1.6;
+    const sb = document.getElementById('slider-brightness'); if (sb) sb.value = -135;
+    const ss = document.getElementById('slider-saturation'); if (ss) ss.value = 1.0;
+    const sh = document.getElementById('slider-sharpness'); if (sh) sh.value = 0.0;
+    const rot = document.getElementById('control-rotation'); if (rot) rot.value = '0';
+
+    shadowRemovalActive = false;
+    const btnSr = document.getElementById('btn-shadow-removal');
+    if (btnSr) {
+        btnSr.innerText = 'Shadow: OFF';
+        btnSr.classList.remove('active');
+    }
+    filterMode = 'GRAYSCALE';
+    setFilterMode('GRAYSCALE');
+
+    if (m === 'ID') {
+        const orientEl = document.getElementById('control-id-orientation');
+        if (orientEl) orientEl.value = 'H';
+        const cmEl = document.getElementById('check-crop-marks');
+        if (cmEl) cmEl.checked = true;
+    }
+
+    zoomSrc = 1.0; panSrc = { x: 0, y: 0 }; updateContainerTransform('src');
+    zoomDst = 1.0; panDst = { x: 0, y: 0 }; updateContainerTransform('dst');
+
+    if (activeIndex !== -1 && imageArray[activeIndex]) {
+        const imgObj = imageArray[activeIndex];
+        imgObj.rotation = 0;
+        imgObj.corners = null;
+        imgObj.cornersDisplayDim = null;
+        imgObj.processedCanvas = null;
+        imgObj.contrast = 1.6;
+        imgObj.brightness = -135;
+        imgObj.saturation = 1.0;
+        imgObj.sharpness = 0.0;
+        imgObj.shadowRemoval = false;
+        imgObj.filterMode = 'GRAYSCALE';
+        setActiveImage(activeIndex);
+    } else {
+        updateSlidersLive();
+    }
+    saveStudioToDB(m === 'ID' ? 'ID' : 'DOC');
+};
+
+window.clearActiveDocOrIdWork = function(mode) {
+    const m = mode || currentMode;
+    if (m === 'DOC' && (docStudioActiveSubTool === 'img2pdf' || docStudioActiveSubTool === 'pdfcompress')) {
+        if (typeof window.clearActiveEditorWork === 'function') {
+            window.clearActiveEditorWork(docStudioActiveSubTool);
+        }
+        return;
+    }
+
+    tempCurrentCroppedCanvas = null;
+    imageArray = [];
+    activeIndex = -1;
+    corners = null;
+    zoomSrc = 1.0; panSrc = { x: 0, y: 0 }; updateContainerTransform('src');
+    zoomDst = 1.0; panDst = { x: 0, y: 0 }; updateContainerTransform('dst');
+
+    if (m === 'ID') {
+        idLeftCanvas = null;
+        idRightCanvas = null;
+        activeSlot = 'left';
+        idStudioState.activeIndex = -1;
+        idStudioState.idLeftCanvas = null;
+        idStudioState.idRightCanvas = null;
+        drawIDPreviewComposite();
+    } else {
+        docStudioState.activeIndex = -1;
+        docStudioState.corners = null;
+        docStudioState.tempCurrentCroppedCanvas = null;
+    }
+
+    if (typeof rebuildGalleryStrip === 'function') rebuildGalleryStrip();
+    if (typeof clearStudioCanvases === 'function') clearStudioCanvases();
+    if (typeof updateButtonStates === 'function') updateButtonStates();
+
+    const canvasSrc = document.getElementById('canvas-src');
+    const containerSrc = document.getElementById('container-src');
+    const srcEmptyMsg = document.getElementById('src-empty-msg');
+    const canvasDst = document.getElementById('canvas-dst');
+    const docDstEmptyMsg = document.getElementById('doc-dst-empty-msg');
+
+    if (canvasSrc) canvasSrc.style.display = 'none';
+    if (containerSrc) containerSrc.style.display = 'none';
+    if (srcEmptyMsg) {
+        srcEmptyMsg.style.display = 'flex';
+        const st = document.getElementById('src-empty-title');
+        const sd = document.getElementById('src-empty-desc');
+        if (st) st.innerText = m === 'ID' ? 'No Card Loaded' : 'No Document Loaded';
+        if (sd) sd.innerText = m === 'ID' ? "Click 'Click or Drop Files' to load an ID card image." : "Click 'Click or Drop Files' in the sidebar to upload.";
+    }
+    if (m === 'DOC') {
+        if (canvasDst) canvasDst.style.display = 'none';
+        if (docDstEmptyMsg) docDstEmptyMsg.style.display = 'flex';
+    }
+    saveStudioToDB(m === 'ID' ? 'ID' : 'DOC');
+};
 
 

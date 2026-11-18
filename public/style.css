@@ -516,22 +516,25 @@ select:focus, input[type="text"]:focus { border-color: #b621fe; box-shadow: 0 0 
 .btn-main:hover:not(:disabled), .btn-assign:hover:not(:disabled), .btn-success:hover:not(:disabled), .btn-purple:hover:not(:disabled), .btn-accent:hover:not(:disabled), .btn-shadow-removal:hover:not(:disabled) { background: linear-gradient(135deg, #6e00a8 0%, #0074a6 100%); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 141, 201, 0.36); }
 .btn-accent.active, .btn-shadow-removal.active { background: linear-gradient(135deg, #008dc9 0%, #8300c9 100%); color: #ffffff; box-shadow: 0 5px 16px rgba(131, 0, 201, 0.36), inset 0 2px 6px rgba(0,0,0,0.28); }
 
-/* Grayscale vs Color Mutual Toggle: Inactive button switches to grayscale */
+/* Grayscale vs Color Mutual Toggle & Shadow Toggle: Inactive button switches to grayscale */
 #btn-effect-grayscale:not(.active):not(:disabled),
-#btn-effect-color:not(.active):not(:disabled) {
+#btn-effect-color:not(.active):not(:disabled),
+#btn-shadow-removal:not(.active):not(:disabled) {
     background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
     filter: grayscale(100%);
     opacity: 0.78;
     box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
 }
 #btn-effect-grayscale:not(.active):not(:disabled):hover,
-#btn-effect-color:not(.active):not(:disabled):hover {
+#btn-effect-color:not(.active):not(:disabled):hover,
+#btn-shadow-removal:not(.active):not(:disabled):hover {
     filter: grayscale(70%);
     opacity: 0.9;
     box-shadow: 0 5px 14px rgba(15, 23, 42, 0.24);
 }
 #btn-effect-grayscale.active:not(:disabled),
-#btn-effect-color.active:not(:disabled) {
+#btn-effect-color.active:not(:disabled),
+#btn-shadow-removal.active:not(:disabled) {
     background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
     filter: none;
     opacity: 1;
@@ -1066,17 +1069,28 @@ input[type="range"].color-balance-range::-moz-range-thumb {
     -webkit-text-fill-color: transparent !important;
 }
 
-/* Document & ID Card Studio shadow remove toggle button */
+/* Document & ID Card Studio shadow toggle button (grayscale when OFF, colored gradient when ON) */
 .btn-shadow-removal:not(.active):not(:disabled) {
     background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
     color: #ffffff;
     border: none;
-    box-shadow: 0 4px 12px rgba(131, 0, 201, 0.24);
+    filter: grayscale(100%);
+    opacity: 0.78;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
 }
 .btn-shadow-removal:not(.active):hover:not(:disabled) {
     background: linear-gradient(135deg, #6e00a8 0%, #0074a6 100%);
     color: #ffffff;
-    box-shadow: 0 6px 18px rgba(0, 141, 201, 0.35);
+    filter: grayscale(70%);
+    opacity: 0.9;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.24);
+}
+.btn-shadow-removal.active:not(:disabled) {
+    background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
+    color: #ffffff;
+    filter: none;
+    opacity: 1;
+    box-shadow: 0 5px 16px rgba(131, 0, 201, 0.38);
 }
 
 /* Center tool intro container */
@@ -5999,4 +6013,335 @@ select:focus {
         font-size: 14.5px;
     }
 }
+
+/* ===================================================================
+   DOCUMENT STUDIO INTEGRATED PDF SUB-TOOL SWITCHER
+   =================================================================== */
+.doc-studio-tool-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    flex-wrap: wrap;
+}
+.doc-studio-switch-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.doc-tool-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: #f4f6fa;
+    border: none;
+    outline: none;
+    border-radius: 8px;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+}
+.doc-tool-tab:hover {
+    background: #eef2f8;
+    color: #6d28d9;
+    box-shadow: 0 4px 12px rgba(131, 0, 201, 0.18);
+}
+.doc-tool-tab.active {
+    background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(131, 0, 201, 0.32);
+}
+.editor-workspace.doc-subtool-hosted {
+    height: calc(100vh - 108px);
+    max-height: calc(100vh - 108px);
+}
+.editor-workspace.doc-subtool-hosted .editor-subnav {
+    display: none;
+}
+.editor-workspace.doc-subtool-hosted .editor-body-grid {
+    height: calc(100vh - 118px);
+    max-height: calc(100vh - 118px);
+}
+@media (max-width: 980px) {
+    .editor-workspace.doc-subtool-hosted,
+    .editor-workspace.doc-subtool-hosted .editor-body-grid {
+        height: auto;
+        max-height: none;
+    }
+}
+
+/* ===================================================================
+   SMARTVLETOOL CUSTOM RIGHT-CLICK CONTEXT MENU & SAFETY DIALOGS
+   =================================================================== */
+#svt-context-menu {
+    position: fixed;
+    z-index: 2147483000;
+    min-width: 244px;
+    max-width: min(310px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 20px 50px rgba(2, 6, 23, 0.55), 0 0 0 1px rgba(131, 0, 201, 0.22);
+    color: #f8fafc;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    user-select: none;
+    display: none;
+    scrollbar-width: thin;
+}
+#svt-context-menu.open {
+    display: block;
+    animation: svtCtxFadeIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes svtCtxFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+.svt-ctx-header {
+    padding: 5px 10px 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, #c084fc 0%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.svt-ctx-section-label {
+    padding: 4px 10px 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.svt-ctx-sep {
+    height: 1px;
+    margin: 5px 6px;
+    background: rgba(148, 163, 184, 0.18);
+}
+.svt-ctx-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7.5px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #e2e8f0;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+.svt-ctx-item:hover:not(:disabled),
+.svt-ctx-item:focus-visible:not(:disabled) {
+    background: linear-gradient(135deg, rgba(131, 0, 201, 0.32) 0%, rgba(0, 141, 201, 0.32) 100%);
+    color: #ffffff;
+    outline: none;
+}
+.svt-ctx-item.danger:hover:not(:disabled),
+.svt-ctx-item.danger:focus-visible:not(:disabled) {
+    background: rgba(239, 68, 68, 0.22);
+    color: #fecaca;
+}
+.svt-ctx-item:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    color: #64748b;
+    background: transparent;
+}
+.svt-ctx-icon {
+    width: 18px;
+    text-align: center;
+    font-size: 13.5px;
+    flex-shrink: 0;
+}
+.svt-ctx-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#svt-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483100;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+#svt-dialog-backdrop.open {
+    display: flex;
+}
+.svt-dialog-card {
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.36);
+    overflow: hidden;
+    color: #0f172a;
+}
+.svt-dialog-header {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #1e1b4b 0%, #3b0764 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.svt-dialog-header h3 {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #ffffff;
+}
+.svt-dialog-close {
+    background: rgba(255, 255, 255, 0.14);
+    border: none;
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: none;
+}
+.svt-dialog-close:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+.svt-dialog-body {
+    padding: 18px 20px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #334155;
+}
+.svt-dialog-warning {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff7ed;
+    border-left: 3px solid #f59e0b;
+    color: #9a3412;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+.svt-dialog-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+.svt-dialog-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 11px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.svt-dialog-check-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    accent-color: #8300c9;
+    flex-shrink: 0;
+}
+.svt-dialog-check-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+.svt-dialog-check-meta {
+    display: block;
+    font-size: 11.5px;
+    color: #64748b;
+    margin-top: 1px;
+}
+.svt-dialog-footer {
+    padding: 12px 20px 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+.svt-dialog-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.14);
+}
+.svt-dialog-btn-cancel {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+.svt-dialog-btn-cancel:hover {
+    background: #cbd5e1;
+}
+.svt-dialog-btn-confirm {
+    background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
+    color: #ffffff;
+}
+.svt-dialog-btn-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: #ffffff;
+}
+.svt-dialog-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.svt-toast {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483200;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.94);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 12px 30px rgba(2, 6, 23, 0.4);
+    pointer-events: none;
+}
+
 
