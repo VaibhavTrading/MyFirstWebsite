@@ -209,6 +209,12 @@
         setTimeout(() => {
             const targetEl = document.getElementById(targetId);
             if (targetEl) {
+                const detailsEl = targetEl.matches('details')
+                    ? targetEl
+                    : targetEl.querySelector('details.tutorial-collapse-card');
+                if (detailsEl && !detailsEl.open) {
+                    detailsEl.open = true;
+                }
                 targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }, 80);
@@ -363,14 +369,21 @@
     }
 
     function openStudioWorkspace(mode) {
-        const targetUrl = (mode === 'ID') ? '/id-card-studio' : (mode === 'EDITOR' ? '/image-pdf-editor' : '/document-studio');
-        navigateTo(targetUrl, true);
+        const targetUrl = (mode === 'ID') ? '/id-card-studio'
+            : (mode === 'EDITOR' ? '/image-pdf-editor'
+            : (mode === 'PASSPORT' ? '/passport-photo-maker' : '/document-studio'));
+        const needsNav = currentRoutePath !== targetUrl;
+        if (needsNav) {
+            navigateTo(targetUrl, true);
+        }
         setTimeout(() => {
-            const toolEl = document.getElementById('shared-studio-workspace') || document.querySelector('.tool-embed-wrapper');
+            const toolEl = (mode === 'PASSPORT')
+                ? (document.getElementById('passport-main-workspace') || document.getElementById('passportWorkspace'))
+                : (document.getElementById('shared-studio-workspace') || document.querySelector('.page-view:not(.hidden) .tool-live-section') || document.querySelector('.tool-embed-wrapper'));
             if (toolEl) {
                 toolEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        }, 100);
+        }, needsNav ? 120 : 30);
     }
 
     function closeStudioWorkspace(shouldNavigate = true) {

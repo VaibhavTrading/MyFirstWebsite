@@ -1016,7 +1016,7 @@ input[type="range"].color-balance-range::-moz-range-thumb {
     white-space: nowrap;
     flex: 1;
     min-width: 0;
-    padding-bottom: 2px;
+    padding: 3px 2px 5px;
 }
 .editor-subnav-tools::-webkit-scrollbar { height: 4px; }
 .editor-subnav-tools::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
@@ -1059,7 +1059,7 @@ input[type="range"].color-balance-range::-moz-range-thumb {
     background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
     color: #ffffff;
     border: none;
-    box-shadow: 0 4px 14px rgba(131, 0, 201, 0.32);
+    box-shadow: 0 3px 10px rgba(131, 0, 201, 0.24);
 }
 
 /* Gradient text header styling matching home page */
@@ -4295,15 +4295,26 @@ select:focus {
 .editor-tool-tab:focus,
 .editor-tool-tab:focus-visible,
 .passport-tool-tab:focus,
-.passport-tool-tab:focus-visible {
+.passport-tool-tab:focus-visible,
+.doc-tool-tab:focus,
+.doc-tool-tab:focus-visible {
+    outline: none !important;
     border: none !important;
-    box-shadow: 0 0 0 2px rgba(131, 0, 201, 0.28), 0 4px 12px rgba(131, 0, 201, 0.22) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.09) !important;
 }
 
 .editor-tool-tab.active,
-.passport-tool-tab.active {
+.editor-tool-tab.active:focus,
+.editor-tool-tab.active:focus-visible,
+.passport-tool-tab.active,
+.passport-tool-tab.active:focus,
+.passport-tool-tab.active:focus-visible,
+.doc-tool-tab.active,
+.doc-tool-tab.active:focus,
+.doc-tool-tab.active:focus-visible {
     outline: none !important;
     border: none !important;
+    box-shadow: 0 3px 10px rgba(131, 0, 201, 0.24) !important;
 }
 
 /* ===================================================================
@@ -6059,7 +6070,7 @@ select:focus {
 .doc-tool-tab.active {
     background: linear-gradient(135deg, #8300c9 0%, #008dc9 100%);
     color: #ffffff;
-    box-shadow: 0 4px 14px rgba(131, 0, 201, 0.32);
+    box-shadow: 0 3px 10px rgba(131, 0, 201, 0.24);
 }
 .editor-workspace.doc-subtool-hosted {
     height: calc(100vh - 108px);
