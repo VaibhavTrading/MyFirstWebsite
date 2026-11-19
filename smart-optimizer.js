@@ -171,7 +171,17 @@
         }
         const originalKB = parseFloat((originalBytes / 1024).toFixed(1));
 
-        // Helper: Render candidate from pristine original image and measure actual Blob size
+        // Helper: Render candidate from pristine original image with progressive step-down for crisp downscaling
+        const createWorkCanvas = (w, h) => {
+            if (typeof OffscreenCanvas !== 'undefined') {
+                return new OffscreenCanvas(w, h);
+            }
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            return c;
+        };
+
         const renderCandidate = (scale, qualityInt) => {
             return new Promise((resolve, reject) => {
                 const targetW = Math.max(1, Math.round(origW * scale));
@@ -179,31 +189,57 @@
 
                 let canvas;
                 let ctx;
+                try {
+                    // Progressive 0.5x mipmap step-down prevents moire & preserves sharpness when scale < 0.5
+                    let srcDrawable = imgElement;
+                    let curW = origW;
+                    let curH = origH;
+                    const tempCanvases = [];
 
-                if (typeof OffscreenCanvas !== 'undefined') {
-                    canvas = new OffscreenCanvas(targetW, targetH);
-                    ctx = canvas.getContext('2d', { alpha: isPng });
-                } else {
-                    canvas = document.createElement('canvas');
-                    canvas.width = targetW;
-                    canvas.height = targetH;
-                    ctx = canvas.getContext('2d', { alpha: isPng });
-                }
+                    while (curW * 0.5 > targetW && curH * 0.5 > targetH) {
+                        const nextW = Math.max(targetW, Math.round(curW * 0.5));
+                        const nextH = Math.max(targetH, Math.round(curH * 0.5));
+                        const stepCanvas = createWorkCanvas(nextW, nextH);
+                        const stepCtx = stepCanvas.getContext('2d', { alpha: isPng });
+                        if (!stepCtx) break;
+                        if (!isPng) {
+                            stepCtx.fillStyle = '#FFFFFF';
+                            stepCtx.fillRect(0, 0, nextW, nextH);
+                        }
+                        stepCtx.imageSmoothingEnabled = true;
+                        stepCtx.imageSmoothingQuality = 'high';
+                        stepCtx.drawImage(srcDrawable, 0, 0, curW, curH, 0, 0, nextW, nextH);
+                        tempCanvases.push(stepCanvas);
+                        srcDrawable = stepCanvas;
+                        curW = nextW;
+                        curH = nextH;
+                    }
 
-                if (!ctx) {
-                    reject(new Error('Canvas 2D context creation failed.'));
+                    canvas = createWorkCanvas(targetW, targetH);
+                    ctx = canvas.getContext('2d', { alpha: isPng });
+                    if (!ctx) {
+                        reject(new Error('Canvas 2D context creation failed.'));
+                        return;
+                    }
+
+                    // White backdrop for lossy image/jpeg and image/webp without alpha
+                    if (!isPng) {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, targetW, targetH);
+                    }
+
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(srcDrawable, 0, 0, curW, curH, 0, 0, targetW, targetH);
+
+                    for (let tc of tempCanvases) {
+                        tc.width = 1;
+                        tc.height = 1;
+                    }
+                } catch (drawErr) {
+                    reject(drawErr);
                     return;
                 }
-
-                // White backdrop for lossy image/jpeg and image/webp without alpha
-                if (!isPng) {
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, targetW, targetH);
-                }
-
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(imgElement, 0, 0, targetW, targetH);
 
                 const clampedQ = Math.min(0.95, Math.max(0.01, qualityInt / 100.0));
 
@@ -324,104 +360,100 @@
                     chosenCandidate = bestPng || fullPng;
                 }
             } else {
-                // JPEG & WebP: Two-Stage Optimization Engine
-                
-                // STAGE A: QUALITY BINARY SEARCH AT 100% ORIGINAL RESOLUTION (Scale = 1.0, Quality 1 to 95)
-                // Goal: Find the highest quality (1..95) where actual Blob size <= targetBytes
-                let lowQ = 1;
-                let highQ = 95;
-                let bestStageACandidate = null;
+                // JPEG & WebP: Quality-Protected Two-Stage Optimization Engine
+                // Never drop JPEG/WebP quality into artifact/posterization zone (Q < 68) at 100% res;
+                // instead gracefully scale dimensions so portraits & docs stay crisp, natural, and artifact-free.
+                const SAFE_STAGE_A_MIN_Q = 68;
+                const SAFE_STAGE_B_MIN_Q = 72;
 
-                while (lowQ <= highQ) {
-                    if (shouldAbort && shouldAbort()) return { aborted: true };
-                    const midQ = Math.floor((lowQ + highQ) / 2);
-                    const cand = await renderCandidate(1.0, midQ);
-                    if (shouldAbort && shouldAbort()) return { aborted: true };
-
-                    if (cand.blob.size <= targetBytes) {
-                        // Valid candidate! Target size satisfied.
-                        bestStageACandidate = cand;
-                        // Search higher quality range to maximize visual quality
-                        lowQ = midQ + 1;
-                    } else {
-                        // Actual size exceeds target size. Search lower quality range
-                        highQ = midQ - 1;
+                // Helper: Binary search quality in [minQ, maxQ] at a given scale
+                const findBestQualityAtScale = async (scale, minQ = 1, maxQ = 95) => {
+                    let lQ = minQ;
+                    let hQ = maxQ;
+                    let bestAtScale = null;
+                    while (lQ <= hQ) {
+                        if (shouldAbort && shouldAbort()) return null;
+                        const midQ = Math.floor((lQ + hQ) / 2);
+                        const cand = await renderCandidate(scale, midQ);
+                        if (shouldAbort && shouldAbort()) return null;
+                        if (cand.blob.size <= targetBytes) {
+                            bestAtScale = cand;
+                            lQ = midQ + 1;
+                        } else {
+                            hQ = midQ - 1;
+                        }
                     }
-                }
+                    return bestAtScale;
+                };
+
+                // STAGE A: Full 100% Original Resolution with Safe Quality Floor [68..95]
+                let bestStageACandidate = await findBestQualityAtScale(1.0, SAFE_STAGE_A_MIN_Q, 95);
+                if (shouldAbort && shouldAbort()) return { aborted: true };
 
                 if (bestStageACandidate !== null) {
-                    // STAGE A SUCCESS!
-                    // Target size achieved while preserving 100% original pixel resolution.
+                    // STAGE A SUCCESS! Fits targetBytes cleanly at 100% resolution & high visual quality (>= 68).
                     chosenCandidate = bestStageACandidate;
                 } else {
-                    // STAGE B: RESOLUTION FALLBACK
-                    // Triggered ONLY because even quality = 1 at 100% original resolution exceeds targetBytes.
-                    // Reduce resolution scale (scale < 1.0) while strictly maintaining original aspect ratio.
-
-                    // Helper: Perform quality binary search (1..95) at a specific resolution scale
-                    const findBestQualityAtScale = async (scale) => {
-                        let lQ = 1;
-                        let hQ = 95;
-                        let bestAtScale = null;
-                        while (lQ <= hQ) {
-                            if (shouldAbort && shouldAbort()) return null;
-                            const midQ = Math.floor((lQ + hQ) / 2);
-                            const cand = await renderCandidate(scale, midQ);
-                            if (shouldAbort && shouldAbort()) return null;
-                            if (cand.blob.size <= targetBytes) {
-                                bestAtScale = cand;
-                                lQ = midQ + 1; // Try higher quality at this scale
-                            } else {
-                                hQ = midQ - 1;
-                            }
-                        }
-                        return bestAtScale;
-                    };
-
-                    // Evaluate scale candidates to find the highest practical scale & quality
+                    // STAGE B: Clean Resolution Scaling while keeping Crisp Visual Quality [72..95]
+                    const maxOrigDim = Math.max(origW, origH, 1);
+                    const minCrispScale = Math.max(0.04, Math.min(0.90, 96 / maxOrigDim));
                     let validScaleCandidates = [];
 
-                    // Binary search resolution scale S in [0.005, 0.98]
-                    let loScale = 0.005;
-                    let hiScale = 0.98;
+                    let loScale = minCrispScale;
+                    let hiScale = 0.96;
 
-                    for (let iter = 0; iter < 10; iter++) {
+                    for (let iter = 0; iter < 11; iter++) {
                         if (shouldAbort && shouldAbort()) return { aborted: true };
                         const midScale = parseFloat(((loScale + hiScale) / 2).toFixed(4));
-                        const candAtScale = await findBestQualityAtScale(midScale);
+                        const candAtScale = await findBestQualityAtScale(midScale, SAFE_STAGE_B_MIN_Q, 95);
                         if (shouldAbort && shouldAbort()) return { aborted: true };
 
                         if (candAtScale !== null) {
                             validScaleCandidates.push(candAtScale);
-                            // Scale fits target! Probe if a larger scale also fits
-                            loScale = midScale + 0.005;
+                            loScale = midScale + 0.004;
                         } else {
-                            // Even quality = 1 at midScale exceeds targetBytes. Reduce scale
-                            hiScale = midScale - 0.005;
+                            hiScale = midScale - 0.004;
                         }
 
                         if (loScale > hiScale) break;
                     }
 
                     if (validScaleCandidates.length > 0) {
-                        // Select candidate that maximizes visual fidelity:
-                        // Prefer candidate with high quality (>= 50), then higher resolution scale
-                        validScaleCandidates.sort((a, b) => {
-                            const scoreA = (a.qualityInt >= 50 ? 1000 : 0) + (a.scale * 100) + (a.qualityInt * 0.5);
-                            const scoreB = (b.qualityInt >= 50 ? 1000 : 0) + (b.scale * 100) + (b.qualityInt * 0.5);
-                            return scoreB - scoreA;
-                        });
+                        // Pick the highest resolution candidate that keeps crisp quality >= 72
+                        validScaleCandidates.sort((a, b) => (b.scale - a.scale) || (b.qualityInt - a.qualityInt));
                         chosenCandidate = validScaleCandidates[0];
+
+                        // Optional polish: if winner sits near floor (Q < 78), test a tiny 8% smaller scale to see if Q jumps cleanly >= 80
+                        if (chosenCandidate.qualityInt < 78 && chosenCandidate.scale * 0.92 >= minCrispScale) {
+                            const smootherScale = parseFloat((chosenCandidate.scale * 0.92).toFixed(4));
+                            const smootherCand = await findBestQualityAtScale(smootherScale, 78, 95);
+                            if (shouldAbort && shouldAbort()) return { aborted: true };
+                            if (smootherCand && smootherCand.qualityInt >= 80 && smootherCand.blob.size >= targetBytes * 0.80) {
+                                chosenCandidate = smootherCand;
+                            }
+                        }
                     }
 
-                    // EMERGENCY DOWNSCALE FALLBACK:
-                    // If no candidate <= targetBytes was found yet (e.g. ultra small target like 5 KB),
-                    // geometrically downscale scale until size <= targetBytes IS GUARANTEED!
+                    // STAGE C1: Moderate quality fallback [52..71] ONLY if crisp Q>=72 could not fit even at minCrispScale (e.g. tiny <12KB targets)
+                    if (!chosenCandidate || chosenCandidate.blob.size > targetBytes) {
+                        const modScales = [0.65, 0.45, 0.30, 0.20, 0.12, 0.06];
+                        for (const sc of modScales) {
+                            if (shouldAbort && shouldAbort()) return { aborted: true };
+                            const modCand = await findBestQualityAtScale(sc, 52, 71);
+                            if (shouldAbort && shouldAbort()) return { aborted: true };
+                            if (modCand && modCand.blob.size <= targetBytes) {
+                                chosenCandidate = modCand;
+                                break;
+                            }
+                        }
+                    }
+
+                    // STAGE C2: Emergency downscale fallback (Q 1..51) ONLY for extreme targets (e.g. 1-4 KB)
                     if (!chosenCandidate || chosenCandidate.blob.size > targetBytes) {
                         let emScale = 0.5;
                         while (emScale >= 0.002) {
                             if (shouldAbort && shouldAbort()) return { aborted: true };
-                            const emCand = await findBestQualityAtScale(emScale);
+                            const emCand = await findBestQualityAtScale(emScale, 1, 51);
                             if (shouldAbort && shouldAbort()) return { aborted: true };
                             if (emCand && emCand.blob.size <= targetBytes) {
                                 chosenCandidate = emCand;
