@@ -73,6 +73,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let IMG = null, IMG_FILE = null, RESULT = null, FNAME = 'image', TOOL = 'compress', COMPRESSED_RESULT = null;
+window.TOOL = TOOL;
 const DPI = 96;
 let HISTORY = [], HIST_IDX = -1, liveTimer = null;
 let brightnessApplied = false;
@@ -210,6 +211,25 @@ function updatePdfWorkspaceInfoBar(toolId) {
                 ? `Dimensions: ${w} × ${h} ${unitLabel} (Page ${idx + 1}/${n})`
                 : `Dimensions: Page ${idx + 1}/${n}`;
         }
+        return;
+    }
+
+    if (toolId === 'pdfwatermark') {
+        if (typeof pdfWmState === 'undefined' || !pdfWmState.pdfDoc) {
+            if (sizeEl) sizeEl.textContent = 'Size: —';
+            if (dimEl) dimEl.textContent = 'Dimensions: No PDF Loaded';
+            return;
+        }
+        const totalBytes = pdfWmState.file ? pdfWmState.file.size : (pdfWmState.rawPdfBytes ? pdfWmState.rawPdfBytes.byteLength : 0);
+        if (sizeEl) sizeEl.textContent = `Size: ${formatEditorBytes(totalBytes)}`;
+        if (dimEl) {
+            const w = Math.round(pdfWmState.pageWidth || 0);
+            const h = Math.round(pdfWmState.pageHeight || 0);
+            const totalPages = pdfWmState.pdfDoc.numPages || 1;
+            dimEl.textContent = (w > 0 && h > 0)
+                ? `Dimensions: ${w} × ${h} pt (Page ${pdfWmState.currentPage}/${totalPages})`
+                : `Dimensions: Page ${pdfWmState.currentPage}/${totalPages}`;
+        }
     }
 }
 window.updatePdfWorkspaceInfoBar = updatePdfWorkspaceInfoBar;
@@ -290,8 +310,8 @@ function loadEditorFromDataUrl(dataUrl, name, sourceLabel = 'Document Studio') {
         pushHistory(dataUrl, `Imported from ${sourceLabel}`);
         showEditorStatus(`✅ Image imported from ${sourceLabel}! Choose any tool below.`, 'ok');
 
-        // Select current tool (fallback to compress if standalone batch tool was active)
-        const activeSingleTool = (TOOL && TOOL !== 'img2pdf' && TOOL !== 'pdfcompress') ? TOOL : 'compress';
+        // Select current tool (fallback to compress if standalone PDF/batch tool was active)
+        const activeSingleTool = (TOOL && TOOL !== 'img2pdf' && TOOL !== 'pdfcompress' && TOOL !== 'pdfwatermark') ? TOOL : 'compress';
         switchTool(activeSingleTool, null);
     };
     img.src = dataUrl;
@@ -627,6 +647,7 @@ async function receiveCrossStudioTransfer(payload) {
     const firstItem = payload.items[0];
     if (firstItem && firstItem.dataUrl) {
         TOOL = 'compress';
+        window.TOOL = TOOL;
         loadEditorFromDataUrl(firstItem.dataUrl, firstItem.name || 'studio_image', sourceLabel);
     }
 }
@@ -955,14 +976,15 @@ const EDITOR_TOOLS_META = {
     crop: { title: 'Crop, Flip & Rotate Canvas', desc: 'Crop with precise units and presets, flip horizontal/vertical, or rotate by custom angle.' },
     convert: { title: 'Format Converter', desc: 'Convert seamlessly between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats.' },
     brightness: { title: 'Adjust Color & RGB Balance', desc: 'Tune Brightness, Contrast, Saturation, Hue & Pro RGB Color Balance (Shadows/Midtones/Highlights).' },
-    watermark: { title: 'Custom Text Watermark', desc: 'Stamp text copyright, brand marks, or notices at 9 anchor points with opacity control.' },
     img2pdf: { title: 'Batch Images to PDF Compiler', desc: 'Compile multiple images into one multi-page PDF with reordering, sizing, and target limits.' },
-    pdfcompress: { title: 'PDF Compress & Optimizer', desc: 'Unified multi-file/multi-page PDF optimization with multi-pass DPI rendering.' }
+    pdfcompress: { title: 'PDF Compress & Optimizer', desc: 'Unified multi-file/multi-page PDF optimization with multi-pass DPI rendering.' },
+    pdfwatermark: { title: 'PDF Watermark Workbench', desc: 'Apply custom Text or Logo watermarks in single-anchor or tiled grids across PDF pages.' }
 };
 
 // ═══ SWITCH TOOL ═══
 function switchTool(id, btn) {
     TOOL = id;
+    window.TOOL = id;
     const allTabs = document.querySelectorAll('.editor-tool-tab');
     allTabs.forEach(b => b.classList.remove('active'));
     if (btn) {
@@ -987,6 +1009,7 @@ function switchTool(id, btn) {
     const cropCanvasPane = document.getElementById('editorCropCanvasPane');
     const i2pLeftStage = document.getElementById('i2pLeftStage');
     const pdfOptLeftStage = document.getElementById('pdfOptLeftStage');
+    const pdfWmLeftStage = document.getElementById('pdfWmLeftStage');
     const uploadZone = document.getElementById('editorUploadZone');
     const livePreviewImg = document.getElementById('livePreviewImg');
     const changeImgBtn = document.getElementById('changeImgBtn');
@@ -997,7 +1020,7 @@ function switchTool(id, btn) {
     if (previewPane) previewPane.style.display = 'flex';
     if (toolPane) toolPane.style.display = 'flex';
 
-    const standaloneTools = ['img2pdf', 'pdfcompress'];
+    const standaloneTools = ['img2pdf', 'pdfcompress', 'pdfwatermark'];
     const isStandalone = standaloneTools.includes(id);
     const isCrop = id === 'crop';
 
@@ -1017,6 +1040,7 @@ function switchTool(id, btn) {
     if (id === 'img2pdf') {
         if (i2pLeftStage) i2pLeftStage.style.display = 'flex';
         if (pdfOptLeftStage) pdfOptLeftStage.style.display = 'none';
+        if (pdfWmLeftStage) pdfWmLeftStage.style.display = 'none';
         if (singlePreview) singlePreview.style.display = 'none';
         if (cropCanvasPane) cropCanvasPane.style.display = 'none';
         if (uploadZone) uploadZone.style.display = 'none';
@@ -1024,14 +1048,24 @@ function switchTool(id, btn) {
     } else if (id === 'pdfcompress') {
         if (pdfOptLeftStage) pdfOptLeftStage.style.display = 'flex';
         if (i2pLeftStage) i2pLeftStage.style.display = 'none';
+        if (pdfWmLeftStage) pdfWmLeftStage.style.display = 'none';
         if (singlePreview) singlePreview.style.display = 'none';
         if (cropCanvasPane) cropCanvasPane.style.display = 'none';
         if (uploadZone) uploadZone.style.display = 'none';
         renderPdfOptPages();
         updatePdfEstimate();
+    } else if (id === 'pdfwatermark') {
+        if (pdfWmLeftStage) pdfWmLeftStage.style.display = 'flex';
+        if (i2pLeftStage) i2pLeftStage.style.display = 'none';
+        if (pdfOptLeftStage) pdfOptLeftStage.style.display = 'none';
+        if (singlePreview) singlePreview.style.display = 'none';
+        if (cropCanvasPane) cropCanvasPane.style.display = 'none';
+        if (uploadZone) uploadZone.style.display = 'none';
+        renderPdfWatermarkStageState();
     } else {
         if (i2pLeftStage) i2pLeftStage.style.display = 'none';
         if (pdfOptLeftStage) pdfOptLeftStage.style.display = 'none';
+        if (pdfWmLeftStage) pdfWmLeftStage.style.display = 'none';
 
         if (isCrop && IMG) {
             if (singlePreview) singlePreview.style.display = 'none';
@@ -2716,61 +2750,6 @@ function doBrightness() {
     resetBrightness();
 }
 
-// ═══ 11. WATERMARK ═══
-let WM_POS = 'tc';
-function setWMPos(btn) {
-    document.querySelectorAll('.wm-pos-btn').forEach(b => b.classList.remove('active'));
-    if (btn) {
-        btn.classList.add('active');
-        WM_POS = btn.dataset.p;
-    }
-    liveWatermark();
-}
-
-function liveWatermark() {
-    if (!IMG) return;
-    const snap = IMG;
-    canvasLivePreview(() => {
-        const text = document.getElementById('wmText').value || '© SMART VLE TOOL';
-        const size = parseInt(document.getElementById('wmSize').value, 10) || 36;
-        const color = document.getElementById('wmColor').value;
-        const opacity = parseInt(document.getElementById('wmOpacity').value, 10) / 100;
-        const c = getCanvas(snap.width, snap.height), ctx = c.getContext('2d');
-        ctx.drawImage(snap, 0, 0);
-        ctx.globalAlpha = opacity;
-        ctx.font = `bold ${size}px Arial`;
-        ctx.fillStyle = color;
-        ctx.textBaseline = 'top';
-        const tw = ctx.measureText(text).width, pad = 20, p = WM_POS;
-        const x = p.endsWith('l') ? pad : p.endsWith('r') ? snap.width - tw - pad : (snap.width - tw) / 2;
-        const y = p.startsWith('t') ? pad : p.startsWith('b') ? snap.height - size - pad : (snap.height - size) / 2;
-        ctx.fillText(text, x, y);
-        ctx.globalAlpha = 1;
-        return c.toDataURL('image/jpeg', 0.92);
-    }, 80);
-}
-
-function doWatermark() {
-    if (!IMG) { showEditorStatus('⚠️ Upload or import an image first.', 'err'); return; }
-    showEditorProgress(true);
-    const text = document.getElementById('wmText').value || '© SMART VLE TOOL';
-    const size = parseInt(document.getElementById('wmSize').value, 10) || 36;
-    const color = document.getElementById('wmColor').value;
-    const opacity = parseInt(document.getElementById('wmOpacity').value, 10) / 100;
-    const c = getCanvas(IMG.width, IMG.height), ctx = c.getContext('2d');
-    ctx.drawImage(IMG, 0, 0);
-    ctx.globalAlpha = opacity;
-    ctx.font = `bold ${size}px Arial`;
-    ctx.fillStyle = color;
-    ctx.textBaseline = 'top';
-    const tw = ctx.measureText(text).width, pad = 20, p = WM_POS;
-    const x = p.endsWith('l') ? pad : p.endsWith('r') ? IMG.width - tw - pad : (IMG.width - tw) / 2;
-    const y = p.startsWith('t') ? pad : p.startsWith('b') ? IMG.height - size - pad : (IMG.height - size) / 2;
-    ctx.fillText(text, x, y);
-    ctx.globalAlpha = 1;
-    setEditorResult(c.toDataURL('image/jpeg', 0.97), 'Watermark added');
-}
-
 // ═══ 9. METADATA VIEWER ═══
 function showMetadata() {
     if (!IMG) return;
@@ -3748,6 +3727,923 @@ function downloadPDF() {
     showEditorStatus('⬇️ Choose filename to download PDF.', 'ok');
 }
 
+// ═══ 13. PDF WATERMARK WORKBENCH ENGINE (CLIENT-SIDE PDF-LIB + PDF.JS LIVE PREVIEW) ═══
+const pdfWmState = {
+    file: null,
+    rawPdfBytes: null,
+    pdfDoc: null,
+    currentPage: 1,
+    pageWidth: 0,
+    pageHeight: 0,
+    activeTab: 'text',
+    layout: 'single',
+    anchor: 'center',
+    gridDensity: 3,
+    imgFileBytes: null,
+    imgFileType: null,
+    imgElement: null,
+    imgName: '',
+    isProcessing: false,
+    renderToken: 0,
+    basePageCanvas: null,
+    cachedPageDoc: null,
+    cachedPageNum: 0,
+    activeRenderTask: null
+};
+
+function ensurePdfWatermarkLibs(cb) {
+    const loadPdfJs = (next) => {
+        if (window.pdfjsLib) {
+            if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+            }
+            next();
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+        s.onload = () => {
+            if (window.pdfjsLib) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+            }
+            next();
+        };
+        s.onerror = () => next(new Error('Failed to load PDF preview library (PDF.js).'));
+        document.head.appendChild(s);
+    };
+
+    const loadPdfLib = (next) => {
+        if (window.PDFLib) {
+            next();
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+        s.onload = () => next();
+        s.onerror = () => next(new Error('Failed to load PDF Watermark engine (PDF-Lib).'));
+        document.head.appendChild(s);
+    };
+
+    if (window.pdfjsLib && window.PDFLib) {
+        if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        }
+        cb();
+        return;
+    }
+
+    showEditorStatus('⏳ Loading PDF Watermark libraries…', 'info');
+    loadPdfJs((err1) => {
+        if (err1) { cb(err1); return; }
+        loadPdfLib((err2) => cb(err2 || null));
+    });
+}
+
+function setPdfWmStatusBox(msg, type) {
+    const box = document.getElementById('pdfWmStatusBox');
+    if (!box) return;
+    if (!msg) {
+        box.style.display = 'none';
+        box.textContent = '';
+        box.className = 'svt-wm-status';
+        return;
+    }
+    box.style.display = 'block';
+    box.textContent = msg;
+    box.className = 'svt-wm-status ' + (type === 'err' ? 'err' : (type === 'ok' ? 'ok' : 'info'));
+}
+
+function updatePdfWmModeBadge() {
+    const badge = document.getElementById('pdfWmModeBadge');
+    if (!badge) return;
+    const angleDeg = parseInt(document.getElementById('pdfWmAngle')?.value, 10);
+    const cleanAngle = Number.isFinite(angleDeg) ? angleDeg : 45;
+    const angleLabel = (cleanAngle > 0 ? '+' : '') + cleanAngle + '°';
+    if (pdfWmState.layout === 'tiled') {
+        const density = parseInt(document.getElementById('pdfWmGridDensity')?.value, 10) || pdfWmState.gridDensity || 3;
+        badge.textContent = `Tiled ${density}×${density} • ${angleLabel}`;
+    } else {
+        badge.textContent = `Single • ${angleLabel}`;
+    }
+}
+
+function getPdfWmPositions(width, height) {
+    if (pdfWmState.layout === 'tiled') {
+        const density = Math.max(2, Math.min(5, parseInt(document.getElementById('pdfWmGridDensity')?.value, 10) || pdfWmState.gridDensity || 3));
+        const pts = [];
+        for (let r = 0; r < density; r++) {
+            for (let c = 0; c < density; c++) {
+                pts.push({
+                    x: ((c + 0.5) / density) * width,
+                    y: ((r + 0.5) / density) * height
+                });
+            }
+        }
+        return { points: pts, cols: density, rows: density };
+    }
+    const anchorRatios = {
+        tl: [0.20, 0.16],
+        tr: [0.80, 0.16],
+        center: [0.50, 0.50],
+        bl: [0.20, 0.84],
+        br: [0.80, 0.84]
+    };
+    const pair = anchorRatios[pdfWmState.anchor] || anchorRatios.center;
+    return {
+        points: [{ x: width * pair[0], y: height * pair[1] }],
+        cols: 1,
+        rows: 1
+    };
+}
+
+function parsePdfWmCustomPages(rawStr, totalPages) {
+    const cleaned = (rawStr || '').trim();
+    if (!cleaned) return [];
+    const seen = new Set();
+    const parts = cleaned.split(',');
+    for (const part of parts) {
+        const token = part.trim();
+        if (!token) continue;
+        const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+            let start = parseInt(rangeMatch[1], 10);
+            let end = parseInt(rangeMatch[2], 10);
+            if (start > end) [start, end] = [end, start];
+            for (let p = start; p <= end; p++) {
+                if (p >= 1 && p <= totalPages) seen.add(p - 1);
+            }
+        } else if (/^\d+$/.test(token)) {
+            const p = parseInt(token, 10);
+            if (p >= 1 && p <= totalPages) seen.add(p - 1);
+        } else {
+            return null;
+        }
+    }
+    return Array.from(seen).sort((a, b) => a - b);
+}
+
+function renderPdfWatermarkStageState() {
+    const dropZone = document.getElementById('pdfWmDropZone');
+    const loadingBox = document.getElementById('pdfWmLoading');
+    const contentBox = document.getElementById('pdfWmContentContainer');
+    const processBtn = document.getElementById('pdfWmProcessBtn');
+    const prevBtn = document.getElementById('pdfWmPrevPageBtn');
+    const nextBtn = document.getElementById('pdfWmNextPageBtn');
+    const pageBadge = document.getElementById('pdfWmPageBadge');
+    const fileNameEl = document.getElementById('pdfWmFileName');
+    const specsEl = document.getElementById('pdfWmDocSpecs');
+
+    if (loadingBox) loadingBox.style.display = 'none';
+    updatePdfWmModeBadge();
+
+    if (!pdfWmState.pdfDoc) {
+        if (dropZone) dropZone.style.display = 'flex';
+        if (contentBox) contentBox.style.display = 'none';
+        if (processBtn) processBtn.disabled = true;
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        if (pageBadge) pageBadge.textContent = '1 / 1';
+        if (fileNameEl) fileNameEl.textContent = '-';
+        if (specsEl) specsEl.textContent = '-';
+        updatePdfWorkspaceInfoBar('pdfwatermark');
+        return;
+    }
+
+    if (dropZone) dropZone.style.display = 'none';
+    if (contentBox) contentBox.style.display = 'flex';
+    if (processBtn) processBtn.disabled = !!pdfWmState.isProcessing;
+
+    const total = pdfWmState.pdfDoc.numPages || 1;
+    if (fileNameEl) fileNameEl.textContent = pdfWmState.file ? pdfWmState.file.name : 'Document.pdf';
+    if (specsEl) {
+        const w = Math.round(pdfWmState.pageWidth || 0);
+        const h = Math.round(pdfWmState.pageHeight || 0);
+        specsEl.textContent = (w > 0 && h > 0)
+            ? `${w}×${h} pt • ${total} Page${total !== 1 ? 's' : ''}`
+            : `${total} Page${total !== 1 ? 's' : ''}`;
+    }
+    if (pageBadge) pageBadge.textContent = `${pdfWmState.currentPage} / ${total}`;
+    if (prevBtn) prevBtn.disabled = pdfWmState.currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = pdfWmState.currentPage >= total;
+
+    updatePdfWatermarkPreview();
+    updatePdfWorkspaceInfoBar('pdfwatermark');
+}
+
+function setPdfWatermarkTab(tab, btn) {
+    pdfWmState.activeTab = tab === 'image' ? 'image' : 'text';
+    const textTab = document.getElementById('pdfWmTabText');
+    const imgTab = document.getElementById('pdfWmTabImage');
+    const textControls = document.getElementById('pdfWmTextControls');
+    const imgControls = document.getElementById('pdfWmImageControls');
+    const sizeWrap = document.getElementById('pdfWmSizeWrap');
+    const scaleWrap = document.getElementById('pdfWmScaleWrap');
+    const colorGroup = document.getElementById('pdfWmColorGroup');
+
+    if (textTab) textTab.classList.toggle('active', pdfWmState.activeTab === 'text');
+    if (imgTab) imgTab.classList.toggle('active', pdfWmState.activeTab === 'image');
+    if (btn) btn.classList.add('active');
+
+    if (textControls) textControls.style.display = pdfWmState.activeTab === 'text' ? 'block' : 'none';
+    if (imgControls) imgControls.style.display = pdfWmState.activeTab === 'image' ? 'block' : 'none';
+    if (sizeWrap) sizeWrap.style.display = pdfWmState.activeTab === 'text' ? '' : 'none';
+    if (scaleWrap) scaleWrap.style.display = pdfWmState.activeTab === 'image' ? '' : 'none';
+    if (colorGroup) colorGroup.style.display = pdfWmState.activeTab === 'text' ? '' : 'none';
+
+    updatePdfWatermarkPreview();
+}
+window.setPdfWatermarkTab = setPdfWatermarkTab;
+
+function setPdfWatermarkLayout(mode, btn) {
+    pdfWmState.layout = mode === 'tiled' ? 'tiled' : 'single';
+    const singleBtn = document.getElementById('pdfWmLayoutSingle');
+    const tiledBtn = document.getElementById('pdfWmLayoutTiled');
+    const anchorGroup = document.getElementById('pdfWmAnchorGroup');
+    const gridGroup = document.getElementById('pdfWmGridGroup');
+
+    if (singleBtn) singleBtn.classList.toggle('active', pdfWmState.layout === 'single');
+    if (tiledBtn) tiledBtn.classList.toggle('active', pdfWmState.layout === 'tiled');
+    if (btn) btn.classList.add('active');
+
+    if (anchorGroup) anchorGroup.style.display = pdfWmState.layout === 'single' ? '' : 'none';
+    if (gridGroup) gridGroup.style.display = pdfWmState.layout === 'tiled' ? '' : 'none';
+
+    updatePdfWmModeBadge();
+    updatePdfWatermarkPreview();
+}
+window.setPdfWatermarkLayout = setPdfWatermarkLayout;
+
+function setPdfWatermarkAnchor(anchor, btn) {
+    const allowed = ['tl', 'tr', 'center', 'bl', 'br'];
+    pdfWmState.anchor = allowed.includes(anchor) ? anchor : 'center';
+    const row = document.getElementById('pdfWmAnchorRow');
+    if (row) {
+        row.querySelectorAll('.svt-wm-anchor-btn').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('data-anchor') === pdfWmState.anchor);
+        });
+    }
+    if (btn) btn.classList.add('active');
+    updatePdfWatermarkPreview();
+}
+window.setPdfWatermarkAnchor = setPdfWatermarkAnchor;
+
+function syncPdfWatermarkAngleFromSlider(val) {
+    const deg = Math.max(-90, Math.min(90, parseInt(val, 10) || 0));
+    const angleVal = document.getElementById('pdfWmAngleVal');
+    if (angleVal) angleVal.textContent = `${deg}°`;
+    const chips = document.getElementById('pdfWmAngleChips');
+    if (chips) {
+        chips.querySelectorAll('.svt-wm-chip').forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.getAttribute('data-angle'), 10) === deg);
+        });
+    }
+    updatePdfWmModeBadge();
+    updatePdfWatermarkPreview();
+}
+window.syncPdfWatermarkAngleFromSlider = syncPdfWatermarkAngleFromSlider;
+
+function setPdfWatermarkAnglePreset(deg, btn) {
+    const clean = Math.max(-90, Math.min(90, parseInt(deg, 10) || 0));
+    const slider = document.getElementById('pdfWmAngle');
+    if (slider) slider.value = String(clean);
+    const angleVal = document.getElementById('pdfWmAngleVal');
+    if (angleVal) angleVal.textContent = `${clean}°`;
+    const chips = document.getElementById('pdfWmAngleChips');
+    if (chips) {
+        chips.querySelectorAll('.svt-wm-chip').forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.getAttribute('data-angle'), 10) === clean);
+        });
+    }
+    if (btn) btn.classList.add('active');
+    updatePdfWmModeBadge();
+    updatePdfWatermarkPreview();
+}
+window.setPdfWatermarkAnglePreset = setPdfWatermarkAnglePreset;
+
+function setPdfWatermarkColorSwatch(hex, btn) {
+    const colorInput = document.getElementById('pdfWmColor');
+    if (colorInput) colorInput.value = hex;
+    const swatches = document.getElementById('pdfWmSwatches');
+    if (swatches) {
+        swatches.querySelectorAll('.svt-wm-swatch').forEach(sw => {
+            sw.classList.toggle('active', (sw.getAttribute('data-color') || '').toLowerCase() === hex.toLowerCase());
+        });
+    }
+    if (btn) btn.classList.add('active');
+    updatePdfWatermarkPreview();
+}
+window.setPdfWatermarkColorSwatch = setPdfWatermarkColorSwatch;
+
+function syncPdfWatermarkColorPicker(hex) {
+    const swatches = document.getElementById('pdfWmSwatches');
+    if (swatches) {
+        swatches.querySelectorAll('.svt-wm-swatch').forEach(sw => {
+            sw.classList.toggle('active', (sw.getAttribute('data-color') || '').toLowerCase() === (hex || '').toLowerCase());
+        });
+    }
+    updatePdfWatermarkPreview();
+}
+window.syncPdfWatermarkColorPicker = syncPdfWatermarkColorPicker;
+
+function togglePdfWmCustomRange() {
+    const scope = document.getElementById('pdfWmPageScope')?.value || 'all';
+    const wrap = document.getElementById('pdfWmCustomRangeWrap');
+    if (wrap) wrap.style.display = scope === 'custom' ? 'block' : 'none';
+}
+window.togglePdfWmCustomRange = togglePdfWmCustomRange;
+
+function clearPdfWatermarkLogo() {
+    const imgInput = document.getElementById('pdfWmImageInput');
+    const logoBar = document.getElementById('pdfWmLogoBar');
+    const imgThumb = document.getElementById('pdfWmLogoPreviewImg');
+    const logoName = document.getElementById('pdfWmLogoName');
+    if (imgInput) imgInput.value = '';
+    if (logoBar) logoBar.style.display = 'none';
+    if (imgThumb) imgThumb.src = '';
+    if (logoName) logoName.textContent = 'Logo Ready';
+    pdfWmState.imgFileBytes = null;
+    pdfWmState.imgFileType = null;
+    pdfWmState.imgElement = null;
+    pdfWmState.imgName = '';
+    updatePdfWatermarkPreview();
+}
+window.clearPdfWatermarkLogo = clearPdfWatermarkLogo;
+
+function loadPdfWatermarkFile(inputOrFile) {
+    const file = inputOrFile && inputOrFile.files ? inputOrFile.files[0] : inputOrFile;
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        showEditorStatus('⚠️ Please select a valid PDF file.', 'err');
+        setPdfWmStatusBox('Please select a valid PDF file.', 'err');
+        return;
+    }
+
+    const dropZone = document.getElementById('pdfWmDropZone');
+    const loadingBox = document.getElementById('pdfWmLoading');
+    const contentBox = document.getElementById('pdfWmContentContainer');
+
+    if (dropZone) dropZone.style.display = 'none';
+    if (contentBox) contentBox.style.display = 'none';
+    if (loadingBox) loadingBox.style.display = 'flex';
+    setPdfWmStatusBox('', '');
+
+    ensurePdfWatermarkLibs(async (libErr) => {
+        if (libErr) {
+            if (loadingBox) loadingBox.style.display = 'none';
+            if (dropZone) dropZone.style.display = 'flex';
+            showEditorStatus('❌ ' + libErr.message, 'err');
+            setPdfWmStatusBox(libErr.message, 'err');
+            return;
+        }
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const rawBytes = new Uint8Array(arrayBuffer);
+            const pdfDoc = await loadPdfDocumentSafe(rawBytes.slice(0), file.name, (msg, type) => showEditorStatus(msg, type));
+
+            if (pdfWmState.activeRenderTask && typeof pdfWmState.activeRenderTask.cancel === 'function') {
+                try { pdfWmState.activeRenderTask.cancel(); } catch (_) {}
+                pdfWmState.activeRenderTask = null;
+            }
+            pdfWmState.file = file;
+            pdfWmState.rawPdfBytes = rawBytes;
+            pdfWmState.pdfDoc = pdfDoc;
+            pdfWmState.currentPage = 1;
+            pdfWmState.basePageCanvas = null;
+            pdfWmState.cachedPageDoc = null;
+            pdfWmState.cachedPageNum = 0;
+
+            if (inputOrFile && inputOrFile.tagName === 'INPUT') {
+                inputOrFile.value = '';
+            }
+
+            renderPdfWatermarkStageState();
+            showEditorStatus(`✅ PDF loaded (${pdfDoc.numPages} page${pdfDoc.numPages !== 1 ? 's' : ''}). Customize watermark settings on the right.`, 'ok');
+        } catch (err) {
+            console.error('PDF Watermark load error:', err);
+            if (loadingBox) loadingBox.style.display = 'none';
+            if (pdfWmState.pdfDoc && contentBox) {
+                contentBox.style.display = 'flex';
+            } else if (dropZone) {
+                dropZone.style.display = 'flex';
+            }
+            const msg = err && err.message ? err.message : 'Unable to load PDF file.';
+            showEditorStatus('❌ Error loading PDF: ' + msg, 'err');
+            setPdfWmStatusBox('Error loading PDF: ' + msg, 'err');
+        }
+    });
+}
+window.loadPdfWatermarkFile = loadPdfWatermarkFile;
+
+function changePdfWatermarkPage(delta) {
+    if (!pdfWmState.pdfDoc) return;
+    const total = pdfWmState.pdfDoc.numPages || 1;
+    const next = Math.max(1, Math.min(total, pdfWmState.currentPage + delta));
+    if (next === pdfWmState.currentPage) return;
+    pdfWmState.currentPage = next;
+    renderPdfWatermarkStageState();
+}
+window.changePdfWatermarkPage = changePdfWatermarkPage;
+
+function loadPdfWatermarkLogo(input) {
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) return;
+    if (!file.type.startsWith('image/') && !file.name.match(/\.(png|jpe?g|webp|bmp|gif|svg)$/i)) {
+        showEditorStatus('⚠️ Please select a valid image file for watermark logo.', 'err');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        const dataUrl = ev.target.result;
+        const img = new Image();
+        img.onload = async () => {
+            try {
+                let bytes = new Uint8Array(await file.arrayBuffer());
+                let mime = (file.type || '').toLowerCase();
+
+                // Normalize formats outside PNG/JPEG (such as WEBP/BMP/SVG/GIF) to PNG for PDF-Lib
+                if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/jpg') {
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth || img.width || 256;
+                    c.height = img.naturalHeight || img.height || 256;
+                    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                    const pngBlob = await new Promise(res => c.toBlob(res, 'image/png'));
+                    if (pngBlob) {
+                        bytes = new Uint8Array(await pngBlob.arrayBuffer());
+                        mime = 'image/png';
+                    }
+                }
+
+                pdfWmState.imgFileBytes = bytes;
+                pdfWmState.imgFileType = mime;
+                pdfWmState.imgElement = img;
+                pdfWmState.imgName = file.name;
+
+                const logoBar = document.getElementById('pdfWmLogoBar');
+                const thumb = document.getElementById('pdfWmLogoPreviewImg');
+                const logoName = document.getElementById('pdfWmLogoName');
+                if (thumb) thumb.src = dataUrl;
+                if (logoName) logoName.textContent = file.name;
+                if (logoBar) logoBar.style.display = 'flex';
+
+                updatePdfWatermarkPreview();
+                showEditorStatus('✅ Watermark logo loaded & preview updated.', 'ok');
+            } catch (err) {
+                console.error('Logo processing error:', err);
+                showEditorStatus('❌ Could not load logo image.', 'err');
+            }
+        };
+        img.onerror = () => showEditorStatus('❌ Failed to decode logo image.', 'err');
+        img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+}
+window.loadPdfWatermarkLogo = loadPdfWatermarkLogo;
+
+function renderPdfWatermarkComposite() {
+    const canvas = document.getElementById('pdfWmPreviewCanvas');
+    const base = pdfWmState.basePageCanvas;
+    if (!canvas || !base || !base.width || !base.height) return;
+    if (canvas.width !== base.width || canvas.height !== base.height) {
+        canvas.width = base.width;
+        canvas.height = base.height;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+    drawPdfWatermarkOverlay(ctx, canvas.width, canvas.height);
+    updatePdfWorkspaceInfoBar('pdfwatermark');
+}
+
+async function updatePdfWatermarkPreview() {
+    updatePdfWmModeBadge();
+    if (!pdfWmState.pdfDoc) return;
+    const canvas = document.getElementById('pdfWmPreviewCanvas');
+    if (!canvas) return;
+
+    const total = pdfWmState.pdfDoc.numPages || 1;
+    const pageNum = Math.max(1, Math.min(total, pdfWmState.currentPage || 1));
+
+    // Fast synchronous composite when the current page bitmap is already cached
+    if (
+        pdfWmState.basePageCanvas &&
+        pdfWmState.cachedPageDoc === pdfWmState.pdfDoc &&
+        pdfWmState.cachedPageNum === pageNum
+    ) {
+        renderPdfWatermarkComposite();
+        return;
+    }
+
+    const token = ++pdfWmState.renderToken;
+    if (pdfWmState.activeRenderTask && typeof pdfWmState.activeRenderTask.cancel === 'function') {
+        try { pdfWmState.activeRenderTask.cancel(); } catch (_) {}
+        pdfWmState.activeRenderTask = null;
+    }
+
+    try {
+        const page = await pdfWmState.pdfDoc.getPage(pageNum);
+        if (token !== pdfWmState.renderToken || !pdfWmState.pdfDoc) return;
+
+        const viewport = page.getViewport({ scale: 1.0 });
+        pdfWmState.pageWidth = viewport.width;
+        pdfWmState.pageHeight = viewport.height;
+
+        const specsEl = document.getElementById('pdfWmDocSpecs');
+        if (specsEl) {
+            specsEl.textContent = `${Math.round(viewport.width)}×${Math.round(viewport.height)} pt • ${total} Page${total !== 1 ? 's' : ''}`;
+        }
+
+        // Render PDF.js into an isolated offscreen canvas so concurrent transforms never touch #pdfWmPreviewCanvas
+        const offscreen = document.createElement('canvas');
+        offscreen.width = Math.max(1, Math.round(viewport.width));
+        offscreen.height = Math.max(1, Math.round(viewport.height));
+        const offCtx = offscreen.getContext('2d');
+        offCtx.setTransform(1, 0, 0, 1, 0, 0);
+        offCtx.fillStyle = '#ffffff';
+        offCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+        const renderTask = page.render({
+            canvasContext: offCtx,
+            viewport: viewport
+        });
+        pdfWmState.activeRenderTask = renderTask;
+
+        await renderTask.promise;
+        if (pdfWmState.activeRenderTask === renderTask) {
+            pdfWmState.activeRenderTask = null;
+        }
+        if (token !== pdfWmState.renderToken || !pdfWmState.pdfDoc) return;
+
+        pdfWmState.basePageCanvas = offscreen;
+        pdfWmState.cachedPageDoc = pdfWmState.pdfDoc;
+        pdfWmState.cachedPageNum = pageNum;
+        renderPdfWatermarkComposite();
+    } catch (err) {
+        if (err && err.name === 'RenderingCancelledException') return;
+        console.error('PDF Watermark preview error:', err);
+    }
+}
+window.updatePdfWatermarkPreview = updatePdfWatermarkPreview;
+
+function drawPdfWatermarkOverlay(canvasCtx, width, height) {
+    const isText = pdfWmState.activeTab === 'text';
+    const rawOpacity = parseFloat(document.getElementById('pdfWmOpacity')?.value);
+    const opacity = Math.max(0.05, Math.min(1, (Number.isFinite(rawOpacity) ? rawOpacity : 40) / 100));
+    const angleRaw = parseInt(document.getElementById('pdfWmAngle')?.value, 10);
+    const angleDeg = Number.isFinite(angleRaw) ? angleRaw : 45;
+    // Canvas Y points down (+rad rotates CW), PDF-Lib Y points up (+deg rotates CCW)
+    const canvasRad = (-angleDeg * Math.PI) / 180;
+    const autoAdjust = document.getElementById('pdfWmAutoAdjust')?.checked !== false;
+    const { points, cols, rows } = getPdfWmPositions(width, height);
+
+    const text = (document.getElementById('pdfWmText')?.value || '').trim() || 'SMARTVLETOOL';
+    let baseSize = parseInt(document.getElementById('pdfWmFontSize')?.value, 10) || 40;
+    const color = document.getElementById('pdfWmColor')?.value || '#475569';
+
+    if (isText) {
+        canvasCtx.save();
+        canvasCtx.font = `bold ${baseSize}px Helvetica, Arial, sans-serif`;
+        const measured = canvasCtx.measureText(text).width;
+        canvasCtx.restore();
+
+        if (autoAdjust && measured > 0) {
+            const maxAllowedWidth = (width / cols) * 0.82;
+            if (measured > maxAllowedWidth) {
+                baseSize = Math.max(12, Math.floor((maxAllowedWidth / measured) * baseSize));
+            }
+        }
+    }
+
+    let imgW = 0;
+    let imgH = 0;
+    if (!isText && pdfWmState.imgElement && pdfWmState.imgElement.complete) {
+        const rawScale = parseFloat(document.getElementById('pdfWmImageScale')?.value);
+        const imageScale = Math.max(0.05, Math.min(1, (Number.isFinite(rawScale) ? rawScale : 30) / 100));
+        const naturalW = pdfWmState.imgElement.naturalWidth || pdfWmState.imgElement.width || 100;
+        const naturalH = pdfWmState.imgElement.naturalHeight || pdfWmState.imgElement.height || 100;
+        imgW = naturalW * imageScale;
+        imgH = naturalH * imageScale;
+
+        if (autoAdjust) {
+            const maxW = (width / cols) * 0.72;
+            const maxH = (height / rows) * 0.72;
+            if (imgW > maxW) {
+                const ratio = maxW / imgW;
+                imgW = maxW;
+                imgH *= ratio;
+            }
+            if (imgH > maxH) {
+                const ratio = maxH / imgH;
+                imgH = maxH;
+                imgW *= ratio;
+            }
+        }
+    }
+
+    for (const pt of points) {
+        canvasCtx.save();
+        canvasCtx.globalAlpha = opacity;
+        canvasCtx.translate(pt.x, pt.y);
+        canvasCtx.rotate(canvasRad);
+
+        if (isText) {
+            canvasCtx.font = `bold ${baseSize}px Helvetica, Arial, sans-serif`;
+            canvasCtx.fillStyle = color;
+            canvasCtx.textAlign = 'center';
+            canvasCtx.textBaseline = 'middle';
+            canvasCtx.fillText(text, 0, 0);
+        } else if (pdfWmState.imgElement && pdfWmState.imgElement.complete && imgW > 0 && imgH > 0) {
+            canvasCtx.drawImage(pdfWmState.imgElement, -imgW / 2, -imgH / 2, imgW, imgH);
+        }
+
+        canvasCtx.restore();
+    }
+}
+
+async function runPdfWatermark() {
+    if (!pdfWmState.file || !pdfWmState.rawPdfBytes) {
+        showEditorStatus('⚠️ Please upload a PDF file first.', 'err');
+        setPdfWmStatusBox('Please upload a PDF file first.', 'err');
+        return;
+    }
+
+    const isText = pdfWmState.activeTab === 'text';
+    const textVal = (document.getElementById('pdfWmText')?.value || '').trim();
+    if (isText && !textVal) {
+        showEditorStatus('⚠️ Please enter watermark text.', 'err');
+        setPdfWmStatusBox('Please enter watermark text.', 'err');
+        return;
+    }
+    if (!isText && !pdfWmState.imgFileBytes) {
+        showEditorStatus('⚠️ Please upload a watermark logo image.', 'err');
+        setPdfWmStatusBox('Please upload a watermark logo image.', 'err');
+        return;
+    }
+
+    const btn = document.getElementById('pdfWmProcessBtn');
+    pdfWmState.isProcessing = true;
+    if (btn) btn.disabled = true;
+    showEditorProgress(true);
+    setPdfWmStatusBox('⏳ Applying watermark across selected PDF pages…', 'info');
+    showEditorStatus('⏳ Stamping watermark onto PDF pages…', 'info');
+
+    ensurePdfWatermarkLibs(async (libErr) => {
+        if (libErr) {
+            pdfWmState.isProcessing = false;
+            if (btn) btn.disabled = !pdfWmState.pdfDoc;
+            finishEditorProgress();
+            setPdfWmStatusBox(libErr.message, 'err');
+            showEditorStatus('❌ ' + libErr.message, 'err');
+            return;
+        }
+
+        try {
+            const pdfDocLib = await window.PDFLib.PDFDocument.load(pdfWmState.rawPdfBytes.slice(0), { ignoreEncryption: true });
+            const rawOpacity = parseFloat(document.getElementById('pdfWmOpacity')?.value);
+            const opacity = Math.max(0.05, Math.min(1, (Number.isFinite(rawOpacity) ? rawOpacity : 40) / 100));
+            const angleRaw = parseInt(document.getElementById('pdfWmAngle')?.value, 10);
+            const angleDeg = Number.isFinite(angleRaw) ? angleRaw : 45;
+            const fontSize = parseInt(document.getElementById('pdfWmFontSize')?.value, 10) || 40;
+            const rawScale = parseFloat(document.getElementById('pdfWmImageScale')?.value);
+            const imageScale = Math.max(0.05, Math.min(1, (Number.isFinite(rawScale) ? rawScale : 30) / 100));
+            const autoAdjust = document.getElementById('pdfWmAutoAdjust')?.checked !== false;
+            const pageScope = document.getElementById('pdfWmPageScope')?.value || 'all';
+            const customRangeStr = document.getElementById('pdfWmCustomRange')?.value || '';
+
+            const pages = pdfDocLib.getPages();
+            let targetIndices = pages.map((_, idx) => idx);
+            if (pageScope === 'first') {
+                targetIndices = pages.length > 0 ? [0] : [];
+            } else if (pageScope === 'custom') {
+                const parsed = parsePdfWmCustomPages(customRangeStr, pages.length);
+                if (!parsed || parsed.length === 0) {
+                    throw new Error(`Enter valid page numbers between 1 and ${pages.length} (e.g. 1-3, 5).`);
+                }
+                targetIndices = parsed;
+            }
+
+            const theta = (angleDeg * Math.PI) / 180;
+            const cosT = Math.cos(theta);
+            const sinT = Math.sin(theta);
+
+            let pdfFont = null;
+            let embeddedImg = null;
+
+            if (isText) {
+                pdfFont = await pdfDocLib.embedFont(window.PDFLib.StandardFonts.HelveticaBold);
+            } else {
+                const mime = (pdfWmState.imgFileType || '').toLowerCase();
+                if (mime === 'image/png' || mime.includes('png')) {
+                    embeddedImg = await pdfDocLib.embedPng(pdfWmState.imgFileBytes.slice(0));
+                } else {
+                    embeddedImg = await pdfDocLib.embedJpg(pdfWmState.imgFileBytes.slice(0));
+                }
+            }
+
+            const colorHex = document.getElementById('pdfWmColor')?.value || '#475569';
+            const r = parseInt(colorHex.slice(1, 3), 16) / 255;
+            const g = parseInt(colorHex.slice(3, 5), 16) / 255;
+            const b = parseInt(colorHex.slice(5, 7), 16) / 255;
+
+            for (const pageIdx of targetIndices) {
+                const page = pages[pageIdx];
+                if (!page) continue;
+                const { width, height } = page.getSize();
+                const { points, cols, rows } = getPdfWmPositions(width, height);
+
+                if (isText) {
+                    let finalFontSize = fontSize;
+                    let textWidth = pdfFont.widthOfTextAtSize(textVal, finalFontSize);
+
+                    if (autoAdjust && textWidth > 0) {
+                        const maxAllowedWidth = (width / cols) * 0.82;
+                        if (textWidth > maxAllowedWidth) {
+                            finalFontSize = Math.max(12, Math.floor((maxAllowedWidth / textWidth) * finalFontSize));
+                            textWidth = pdfFont.widthOfTextAtSize(textVal, finalFontSize);
+                        }
+                    }
+
+                    const capHeight = pdfFont.heightAtSize(finalFontSize, { descender: false });
+                    const halfW = textWidth / 2;
+                    const halfH = capHeight / 2;
+
+                    for (const pt of points) {
+                        const centerY = height - pt.y;
+                        const drawX = pt.x - halfW * cosT + halfH * sinT;
+                        const drawY = centerY - halfW * sinT - halfH * cosT;
+
+                        page.drawText(textVal, {
+                            x: drawX,
+                            y: drawY,
+                            size: finalFontSize,
+                            font: pdfFont,
+                            color: window.PDFLib.rgb(r, g, b),
+                            opacity: opacity,
+                            rotate: window.PDFLib.degrees(angleDeg)
+                        });
+                    }
+                } else if (embeddedImg) {
+                    let imgWidth = embeddedImg.width * imageScale;
+                    let imgHeight = embeddedImg.height * imageScale;
+
+                    if (autoAdjust) {
+                        const maxW = (width / cols) * 0.72;
+                        const maxH = (height / rows) * 0.72;
+                        if (imgWidth > maxW) {
+                            const ratio = maxW / imgWidth;
+                            imgWidth = maxW;
+                            imgHeight *= ratio;
+                        }
+                        if (imgHeight > maxH) {
+                            const ratio = maxH / imgHeight;
+                            imgHeight = maxH;
+                            imgWidth *= ratio;
+                        }
+                    }
+
+                    const halfW = imgWidth / 2;
+                    const halfH = imgHeight / 2;
+
+                    for (const pt of points) {
+                        const centerY = height - pt.y;
+                        const drawX = pt.x - halfW * cosT + halfH * sinT;
+                        const drawY = centerY - halfW * sinT - halfH * cosT;
+
+                        page.drawImage(embeddedImg, {
+                            x: drawX,
+                            y: drawY,
+                            width: imgWidth,
+                            height: imgHeight,
+                            opacity: opacity,
+                            rotate: window.PDFLib.degrees(angleDeg)
+                        });
+                    }
+                }
+            }
+
+            const outBytes = await pdfDocLib.save();
+            const blob = new Blob([outBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const origBase = (pdfWmState.file.name || 'document.pdf').replace(/\.pdf$/i, '');
+            const defaultBase = 'svt_watermarked_' + origBase;
+            const sizeKB = blob.size / 1024;
+            const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(2)} MB` : `${Math.max(1, Math.round(sizeKB))} KB`;
+            const stampedCount = targetIndices.length;
+            const dimStr = `${pages.length} Page${pages.length !== 1 ? 's' : ''}`;
+
+            const triggerFn = window.triggerDownloadWithFilenameModal || (typeof triggerDownloadWithFilenameModal === 'function' ? triggerDownloadWithFilenameModal : null);
+            if (triggerFn) {
+                triggerFn(url, defaultBase, 'pdf', dimStr, sizeStr, blob);
+            } else {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${defaultBase}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 5000);
+            }
+
+            setPdfWmStatusBox(`✅ Watermark applied to ${stampedCount} of ${pages.length} page${pages.length !== 1 ? 's' : ''}! Ready to download.`, 'ok');
+            showEditorStatus(`✅ Watermark added to ${stampedCount} PDF page${stampedCount !== 1 ? 's' : ''}!`, 'ok');
+        } catch (err) {
+            console.error('PDF Watermark process error:', err);
+            const msg = err && err.message ? err.message : 'Failed to apply PDF watermark.';
+            setPdfWmStatusBox('❌ ' + msg, 'err');
+            showEditorStatus('❌ ' + msg, 'err');
+        } finally {
+            pdfWmState.isProcessing = false;
+            if (btn) btn.disabled = !pdfWmState.pdfDoc;
+            finishEditorProgress();
+        }
+    });
+}
+window.runPdfWatermark = runPdfWatermark;
+
+function resetPdfWatermarkSettingsOnly() {
+    const textInput = document.getElementById('pdfWmText');
+    const fontSel = document.getElementById('pdfWmFontSize');
+    const fontVal = document.getElementById('pdfWmFontSizeVal');
+    const scaleSel = document.getElementById('pdfWmImageScale');
+    const scaleVal = document.getElementById('pdfWmImageScaleVal');
+    const gridSel = document.getElementById('pdfWmGridDensity');
+    const gridVal = document.getElementById('pdfWmGridVal');
+    const angleSel = document.getElementById('pdfWmAngle');
+    const angleVal = document.getElementById('pdfWmAngleVal');
+    const opSel = document.getElementById('pdfWmOpacity');
+    const opVal = document.getElementById('pdfWmOpacityVal');
+    const colorInput = document.getElementById('pdfWmColor');
+    const autoCheck = document.getElementById('pdfWmAutoAdjust');
+    const pageScope = document.getElementById('pdfWmPageScope');
+    const customRangeWrap = document.getElementById('pdfWmCustomRangeWrap');
+    const customRangeInput = document.getElementById('pdfWmCustomRange');
+
+    if (textInput) textInput.value = 'SMARTVLETOOL';
+    if (fontSel) fontSel.value = '40';
+    if (fontVal) fontVal.textContent = '40 pt';
+    if (scaleSel) scaleSel.value = '30';
+    if (scaleVal) scaleVal.textContent = '30%';
+    if (gridSel) gridSel.value = '3';
+    if (gridVal) gridVal.textContent = '3 × 3';
+    if (angleSel) angleSel.value = '45';
+    if (angleVal) angleVal.textContent = '45°';
+    if (opSel) opSel.value = '40';
+    if (opVal) opVal.textContent = '40%';
+    if (colorInput) colorInput.value = '#475569';
+    if (autoCheck) autoCheck.checked = true;
+    if (pageScope) pageScope.value = 'all';
+    if (customRangeWrap) customRangeWrap.style.display = 'none';
+    if (customRangeInput) customRangeInput.value = '';
+
+    pdfWmState.gridDensity = 3;
+    clearPdfWatermarkLogo();
+    setPdfWatermarkColorSwatch('#475569', document.querySelector('#pdfWmSwatches .svt-wm-swatch[data-color="#475569"]'));
+    setPdfWatermarkAnglePreset(45, document.querySelector('#pdfWmAngleChips .svt-wm-chip[data-angle="45"]'));
+    setPdfWatermarkAnchor('center', document.querySelector('#pdfWmAnchorRow .svt-wm-anchor-btn[data-anchor="center"]'));
+    setPdfWatermarkLayout('single', document.getElementById('pdfWmLayoutSingle'));
+    setPdfWatermarkTab('text', document.getElementById('pdfWmTabText'));
+    setPdfWmStatusBox('', '');
+    updatePdfWmModeBadge();
+}
+
+function resetPdfWatermarkTool(clearPdfToo = false) {
+    resetPdfWatermarkSettingsOnly();
+    if (clearPdfToo) {
+        if (pdfWmState.activeRenderTask && typeof pdfWmState.activeRenderTask.cancel === 'function') {
+            try { pdfWmState.activeRenderTask.cancel(); } catch (_) {}
+            pdfWmState.activeRenderTask = null;
+        }
+        pdfWmState.file = null;
+        pdfWmState.rawPdfBytes = null;
+        pdfWmState.pdfDoc = null;
+        pdfWmState.currentPage = 1;
+        pdfWmState.pageWidth = 0;
+        pdfWmState.pageHeight = 0;
+        pdfWmState.basePageCanvas = null;
+        pdfWmState.cachedPageDoc = null;
+        pdfWmState.cachedPageNum = 0;
+        const fileInput = document.getElementById('pdfWmFileInput');
+        if (fileInput) fileInput.value = '';
+
+        const canvas = document.getElementById('pdfWmPreviewCanvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        renderPdfWatermarkStageState();
+        showEditorStatus('↺ PDF Watermark reset.', 'info');
+    } else {
+        if (pdfWmState.pdfDoc) updatePdfWatermarkPreview();
+        showEditorStatus('↺ PDF Watermark settings reset to defaults.', 'info');
+    }
+}
+window.resetPdfWatermarkTool = resetPdfWatermarkTool;
+
 // ═══ DRAG & DROP BINDINGS ═══
 window.addEventListener('DOMContentLoaded', () => {
     const uz = document.getElementById('editorUploadZone');
@@ -3827,6 +4723,27 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // PDF Watermark drag & drop on drop zone and stage
+    ['pdfWmDropZone', 'pdfWmLeftStage'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('dragover', e => {
+            e.preventDefault();
+            if (id === 'pdfWmDropZone') el.classList.add('dragover');
+        });
+        el.addEventListener('dragleave', () => {
+            if (id === 'pdfWmDropZone') el.classList.remove('dragover');
+        });
+        el.addEventListener('drop', e => {
+            e.preventDefault();
+            if (id === 'pdfWmDropZone') el.classList.remove('dragover');
+            const files = e.dataTransfer && e.dataTransfer.files;
+            if (files && files.length > 0) {
+                loadPdfWatermarkFile(files[0]);
+            }
+        });
+    });
+
     // Enable smooth mouse wheel scrolling for thumbnail lists
     ['img2pdfList', 'pdfOptPagesList'].forEach(id => {
         const el = document.getElementById(id);
@@ -3849,6 +4766,7 @@ window.hasEditorToolWork = function(scopeTool) {
     const t = scopeTool || TOOL;
     if (t === 'img2pdf') return img2pdfFiles.length > 0;
     if (t === 'pdfcompress') return pdfOptPages.length > 0 || !!PDF_RESULT;
+    if (t === 'pdfwatermark') return !!pdfWmState.pdfDoc || !!pdfWmState.imgFileBytes;
     return !!IMG;
 };
 
@@ -3888,6 +4806,10 @@ window.resetActiveEditorTool = function(scopeTool) {
         showEditorStatus('↺ PDF Optimizer settings & rotations reset to defaults.', 'info');
         return;
     }
+    if (t === 'pdfwatermark') {
+        resetPdfWatermarkTool(false);
+        return;
+    }
     if (IMG) {
         resetEditorImage();
     } else {
@@ -3906,6 +4828,10 @@ window.clearActiveEditorWork = function(scopeTool) {
     }
     if (t === 'pdfcompress') {
         clearPdfOptPages();
+        return;
+    }
+    if (t === 'pdfwatermark') {
+        resetPdfWatermarkTool(true);
         return;
     }
     if (IMG) {

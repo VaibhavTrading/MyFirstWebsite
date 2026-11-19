@@ -55,9 +55,9 @@
         },
         '/image-pdf-editor': {
             pageId: 'page-editor-studio',
-            title: 'Image Editor – Online Image Resizer in KB, Crop, Convert & Watermark',
-            description: 'Resize & compress images in exact KB with 300 DPI for government forms. Crop, adjust color, add watermarks, and convert formats online.',
-            keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, watermark photo',
+            title: 'Image Editor – Online Image Resizer in KB, Crop, Convert & PDF Watermark',
+            description: 'Resize & compress images in exact KB with 300 DPI for government forms. Crop, adjust color, convert formats, and apply custom PDF watermarks online.',
+            keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, pdf watermark',
             path: '/image-pdf-editor'
         },
         '/passport-photo-maker': {
@@ -256,9 +256,10 @@
                     window.switchDocStudioTool(sub);
                 }
             } else if (targetPath === '/image-pdf-editor' && requestedTool && typeof window.switchTool === 'function') {
-                const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'watermark'];
-                if (validTools.includes(requestedTool)) {
-                    window.switchTool(requestedTool);
+                const normalizedTool = requestedTool === 'watermark' ? 'pdfwatermark' : requestedTool;
+                const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'pdfwatermark'];
+                if (validTools.includes(normalizedTool)) {
+                    window.switchTool(normalizedTool);
                 } else {
                     window.switchTool('compress');
                 }
@@ -306,6 +307,13 @@
         // Redirect legacy PDF query params on /image-pdf-editor cleanly into /document-studio
         if (pathname === '/image-pdf-editor' && (requestedTool === 'img2pdf' || requestedTool === 'pdfcompress')) {
             return navigateTo('/document-studio?tool=' + requestedTool, push);
+        }
+        // Redirect PDF Watermark requests on /document-studio or legacy ?tool=watermark into /image-pdf-editor
+        if (pathname === '/document-studio' && requestedTool === 'pdfwatermark') {
+            return navigateTo('/image-pdf-editor?tool=pdfwatermark', push);
+        }
+        if (pathname === '/image-pdf-editor' && requestedTool === 'watermark') {
+            return navigateTo('/image-pdf-editor?tool=pdfwatermark', push);
         }
 
         const route = ROUTES[pathname] || ROUTES['/'];

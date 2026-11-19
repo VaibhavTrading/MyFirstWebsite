@@ -1043,7 +1043,7 @@ function switchMode(mode) {
             editorWs.style.display = 'flex';
         }
         if (typeof window.switchTool === 'function' && (typeof window.TOOL === 'undefined' || window.TOOL === 'img2pdf' || window.TOOL === 'pdfcompress')) {
-            // Keep Image Editor strictly on image utilities when PDF tools are hosted inside Document Studio
+            // Keep Image Editor on image utilities and PDF Watermark when Images to PDF / PDF Optimizer are hosted inside Document Studio
             try {
                 if (typeof TOOL !== 'undefined' && (TOOL === 'img2pdf' || TOOL === 'pdfcompress')) {
                     window.switchTool('compress', null);

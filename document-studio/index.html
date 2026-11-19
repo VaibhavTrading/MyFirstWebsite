@@ -102,11 +102,12 @@
     <script src="https://docs.opencv.org/4.5.4/opencv.js" type="text/javascript" onerror="console.warn('OpenCV.js CDN failed to load.'); window._cvLoadError = true;"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.warn('jsPDF CDN failed to load.'); window._jspdfLoadError = true;"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="console.warn('PDF.js CDN failed to load.'); window._pdfjsLoadError = true;"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" onerror="console.warn('PDF-Lib CDN failed to load.'); window._pdflibLoadError = true;"></script>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css?v=20261119b">
+    <link rel="stylesheet" href="/style.css?v=20261119f">
     <!-- Google AdSense Auto Ads Script -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7314046797237895" crossorigin="anonymous"></script>
 </head>
@@ -276,8 +277,8 @@
                             </div>
                             <div class="info-box">
                                 <div class="info-box-icon">🖨️</div>
-                                <h4>A4 Sheet Print & Integrated PDF Tools</h4>
-                                <p>Direct A4 preview modal with scaling slider, plus built-in <strong>Images to PDF</strong> compiler and <strong>PDF Optimizer</strong> tabs for compiling, compressing, or hitting exact target PDF sizes.</p>
+                                <h4>A4 Sheet Print &amp; Integrated PDF Tools</h4>
+                                <p>Direct A4 preview modal with scaling slider, plus built-in <strong>Images to PDF</strong> and <strong>PDF Optimizer</strong> tabs for compiling or optimizing multi-page PDF documents.</p>
                             </div>
                         </div>
                     </div>
@@ -705,7 +706,7 @@
                     <button class="editor-tool-tab" data-tool="crop" onclick="switchTool('crop', this)">Crop</button>
                     <button class="editor-tool-tab" data-tool="convert" onclick="switchTool('convert', this)">Convert</button>
                     <button class="editor-tool-tab" data-tool="brightness" onclick="switchTool('brightness', this)">Adjust Color</button>
-                    <button class="editor-tool-tab" data-tool="watermark" onclick="switchTool('watermark', this)">Watermark</button>
+                    <button class="editor-tool-tab" data-tool="pdfwatermark" onclick="switchTool('pdfwatermark', this)">PDF Watermark</button>
                 </div>
                 <div class="editor-header-actions" id="editorHeaderActions">
                     <button class="btn btn-accent" id="undoBtn" disabled onclick="doUndo()" title="Undo action (Ctrl+Z)" style="padding:6px 12px; font-size:12px;">↩ Undo (<span id="undoCount">0</span>)</button>
@@ -828,6 +829,47 @@
                                     <img id="pdfOptActiveImg" style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; border-radius:4px; box-shadow:0 4px 14px rgba(0,0,0,0.08);" alt="Active PDF or image page preview">
                                     <div id="pdfOptActiveBadge" style="position:absolute; bottom:8px; left:8px; background:rgba(45,11,30,0.85); color:#ffffff; font-size:10px; font-weight:700; padding:3px 8px; border-radius:4px; max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Page 1</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PDF Watermark Left Workspace -->
+                    <div class="editor-preview-boxes" id="pdfWmLeftStage" style="display:none; flex-direction:column; width:100%; height:100%; gap:12px;">
+                        <!-- PDF Upload Zone -->
+                        <div id="pdfWmDropZone" class="editor-upload-zone" style="max-width:440px; margin:auto;" onclick="document.getElementById('pdfWmFileInput').click()">
+                            <div style="font-size:32px; margin-bottom:6px;">🛡️</div>
+                            <h3>Load PDF Document</h3>
+                            <p style="margin-bottom:14px;">Select or drag a PDF document to apply custom text or logo watermarks offline.</p>
+                            <button class="btn btn-purple" type="button" style="margin: 0 auto;" onclick="event.stopPropagation(); document.getElementById('pdfWmFileInput').click()">Select PDF Document</button>
+                            <div style="margin-top:8px; font-size:11px; color:var(--text-muted); font-weight:600;">100% Local Processing • Multi-Page Live Canvas</div>
+                            <input type="file" id="pdfWmFileInput" accept="application/pdf,.pdf" style="display:none" onchange="loadPdfWatermarkFile(this)">
+                        </div>
+
+                        <!-- Loading State -->
+                        <div id="pdfWmLoading" class="svt-wm-loading" style="display:none;">
+                            <div class="svt-wm-spinner"></div>
+                            <p style="margin:0; font-size:14px; font-weight:800; color:var(--text-dark);">Preparing PDF Pages...</p>
+                            <p style="margin:0; font-size:12px; color:var(--text-muted);">Rendering live canvas workbench</p>
+                        </div>
+
+                        <!-- Live Workbench Stage -->
+                        <div id="pdfWmContentContainer" class="svt-wm-stage" style="display:none;">
+                            <div class="svt-wm-topbar">
+                                <div class="svt-wm-doc-pill">
+                                    <span class="svt-wm-doc-name" id="pdfWmFileName">-</span>
+                                    <span class="svt-wm-doc-specs" id="pdfWmDocSpecs">-</span>
+                                </div>
+                                <div class="svt-wm-nav-group">
+                                    <button type="button" class="svt-wm-nav-btn" id="pdfWmPrevPageBtn" onclick="changePdfWatermarkPage(-1)" title="Previous Page">◀</button>
+                                    <span class="svt-wm-page-readout" id="pdfWmPageBadge">1 / 1</span>
+                                    <button type="button" class="svt-wm-nav-btn" id="pdfWmNextPageBtn" onclick="changePdfWatermarkPage(1)" title="Next Page">▶</button>
+                                    <button type="button" class="svt-wm-nav-btn" onclick="document.getElementById('pdfWmFileInput').click()">Swap PDF</button>
+                                </div>
+                            </div>
+
+                            <div class="svt-wm-viewport">
+                                <canvas id="pdfWmPreviewCanvas"></canvas>
+                                <div class="svt-wm-corner-badge" id="pdfWmModeBadge">Single • +45°</div>
                             </div>
                         </div>
                     </div>
@@ -1080,42 +1122,7 @@
                             </div>
                         </div>
 
-                        <!-- 6. WATERMARK -->
-                        <div id="c-watermark" style="display:none;">
-                            <div class="control-group">
-                                <div class="control-label"><span>Watermark Text</span></div>
-                                <input type="text" id="wmText" value="© SMART VLE TOOL" oninput="liveWatermark()" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-light);">
-                            </div>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                                <div class="control-group">
-                                    <div class="control-label"><span>Font Size</span></div>
-                                    <input type="number" id="wmSize" value="36" min="8" max="200" oninput="liveWatermark()" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-light);">
-                                </div>
-                                <div class="control-group">
-                                    <div class="control-label"><span>Font Color</span></div>
-                                    <input type="color" id="wmColor" value="#ffffff" oninput="liveWatermark()" style="width:100%; height:38px; border:none; border-radius:6px; cursor:pointer;">
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="control-label"><span>Opacity</span><span id="wmOpVal">80%</span></div>
-                                <input type="range" id="wmOpacity" min="5" max="100" value="80" oninput="document.getElementById('wmOpVal').textContent = this.value + '%'; liveWatermark()">
-                            </div>
-                            <div class="control-group">
-                                <div class="control-label"><span>Anchor Position</span></div>
-                                <div class="wm-pos-grid">
-                                    <button class="wm-pos-btn" data-p="tl" onclick="setWMPos(this)">↖</button>
-                                    <button class="wm-pos-btn active" data-p="tc" onclick="setWMPos(this)">↑</button>
-                                    <button class="wm-pos-btn" data-p="tr" onclick="setWMPos(this)">↗</button>
-                                    <button class="wm-pos-btn" data-p="ml" onclick="setWMPos(this)">←</button>
-                                    <button class="wm-pos-btn" data-p="mc" onclick="setWMPos(this)">•</button>
-                                    <button class="wm-pos-btn" data-p="mr" onclick="setWMPos(this)">→</button>
-                                    <button class="wm-pos-btn" data-p="bl" onclick="setWMPos(this)">↙</button>
-                                    <button class="wm-pos-btn" data-p="bc" onclick="setWMPos(this)">↓</button>
-                                    <button class="wm-pos-btn" data-p="br" onclick="setWMPos(this)">↘</button>
-                                </div>
-                            </div>
-                            <button class="btn btn-main" onclick="doWatermark()" style="width:100%;">Stamp Watermark</button>
-                        </div>
+                        <!-- 6. LEGACY IMAGE WATERMARK REMOVED (REPLACED BY PDF WATERMARK) -->
 
                         <!-- 7. IMAGES TO PDF -->
                         <div id="c-img2pdf" style="display:none;">
@@ -1293,6 +1300,127 @@
                                 <button class="btn btn-download" id="pdfDownloadBtn" onclick="downloadPDF()" style="width:100%; margin-top:8px;">Download Optimized PDF</button>
                             </div>
                         </div>
+
+                        <!-- 9. PDF WATERMARK -->
+                        <div id="c-pdfwatermark" style="display:none;">
+                            <div class="sm-tabs" id="pdfWmTypeTabs">
+                                <button type="button" class="sm-tab active" id="pdfWmTabText" onclick="setPdfWatermarkTab('text', this)">Text Stamp</button>
+                                <button type="button" class="sm-tab" id="pdfWmTabImage" onclick="setPdfWatermarkTab('image', this)">Logo Stamp</button>
+                            </div>
+
+                            <!-- Text Stamp Controls -->
+                            <div id="pdfWmTextControls">
+                                <div class="control-group">
+                                    <div class="control-label"><span>Watermark Label</span></div>
+                                    <input type="text" id="pdfWmText" value="SMARTVLETOOL" placeholder="Enter text e.g. SMARTVLETOOL" oninput="updatePdfWatermarkPreview()" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-light);">
+                                </div>
+                            </div>
+
+                            <!-- Logo Stamp Controls -->
+                            <div id="pdfWmImageControls" style="display:none;">
+                                <div class="control-group">
+                                    <div class="control-label"><span>Upload Logo (PNG, JPG, WEBP, SVG)</span></div>
+                                    <input type="file" id="pdfWmImageInput" accept="image/*" onchange="loadPdfWatermarkLogo(this)" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--border-light); background:#ffffff;">
+                                    <div id="pdfWmLogoBar" class="svt-wm-logo-bar" style="display:none;">
+                                        <img id="pdfWmLogoPreviewImg" alt="Watermark logo preview">
+                                        <span class="svt-wm-logo-meta" id="pdfWmLogoName">Logo Ready</span>
+                                        <button type="button" class="svt-wm-nav-btn" onclick="clearPdfWatermarkLogo()" title="Remove Logo">✕</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Placement Pattern -->
+                            <div class="control-group">
+                                <div class="control-label"><span>Placement Pattern</span></div>
+                                <div class="sm-tabs" id="pdfWmLayoutTabs" style="margin-bottom:0;">
+                                    <button type="button" class="sm-tab active" id="pdfWmLayoutSingle" onclick="setPdfWatermarkLayout('single', this)">Single Stamp</button>
+                                    <button type="button" class="sm-tab" id="pdfWmLayoutTiled" onclick="setPdfWatermarkLayout('tiled', this)">Tiled Grid</button>
+                                </div>
+                            </div>
+
+                            <!-- Anchor Position (Single Mode) -->
+                            <div class="control-group" id="pdfWmAnchorGroup">
+                                <div class="control-label"><span>Anchor Position</span></div>
+                                <div class="svt-wm-anchor-row" id="pdfWmAnchorRow">
+                                    <button type="button" class="svt-wm-anchor-btn" data-anchor="tl" onclick="setPdfWatermarkAnchor('tl', this)">Top-Left</button>
+                                    <button type="button" class="svt-wm-anchor-btn" data-anchor="tr" onclick="setPdfWatermarkAnchor('tr', this)">Top-Right</button>
+                                    <button type="button" class="svt-wm-anchor-btn active" data-anchor="center" onclick="setPdfWatermarkAnchor('center', this)">Center</button>
+                                    <button type="button" class="svt-wm-anchor-btn" data-anchor="bl" onclick="setPdfWatermarkAnchor('bl', this)">Bot-Left</button>
+                                    <button type="button" class="svt-wm-anchor-btn" data-anchor="br" onclick="setPdfWatermarkAnchor('br', this)">Bot-Right</button>
+                                </div>
+                            </div>
+
+                            <!-- Grid Density (Tiled Mode) -->
+                            <div class="control-group" id="pdfWmGridGroup" style="display:none;">
+                                <div class="control-label"><span>Grid Density</span><span id="pdfWmGridVal">3 × 3</span></div>
+                                <input type="range" id="pdfWmGridDensity" min="2" max="5" step="1" value="3" oninput="document.getElementById('pdfWmGridVal').textContent = this.value + ' × ' + this.value; updatePdfWatermarkPreview()">
+                            </div>
+
+                            <!-- Size / Scale Sliders -->
+                            <div class="control-group" id="pdfWmSizeWrap">
+                                <div class="control-label"><span>Stamp Font Size</span><span id="pdfWmFontSizeVal">40 pt</span></div>
+                                <input type="range" id="pdfWmFontSize" min="14" max="96" step="2" value="40" oninput="document.getElementById('pdfWmFontSizeVal').textContent = this.value + ' pt'; updatePdfWatermarkPreview()">
+                            </div>
+
+                            <div class="control-group" id="pdfWmScaleWrap" style="display:none;">
+                                <div class="control-label"><span>Logo Scale</span><span id="pdfWmImageScaleVal">30%</span></div>
+                                <input type="range" id="pdfWmImageScale" min="10" max="80" step="5" value="30" oninput="document.getElementById('pdfWmImageScaleVal').textContent = this.value + '%'; updatePdfWatermarkPreview()">
+                            </div>
+
+                            <label class="svt-wm-inline-check" for="pdfWmAutoAdjust">
+                                <input type="checkbox" id="pdfWmAutoAdjust" checked onchange="updatePdfWatermarkPreview()" style="width:15px; height:15px; accent-color:#906bff;">
+                                <span>Auto-fit within page margins</span>
+                            </label>
+
+                            <!-- Rotation Angle Slider + Preset Chips -->
+                            <div class="control-group">
+                                <div class="control-label"><span>Rotation Angle</span><span id="pdfWmAngleVal">45°</span></div>
+                                <input type="range" id="pdfWmAngle" min="-90" max="90" step="5" value="45" oninput="syncPdfWatermarkAngleFromSlider(this.value)">
+                                <div class="svt-wm-chip-row" id="pdfWmAngleChips">
+                                    <button type="button" class="svt-wm-chip" data-angle="0" onclick="setPdfWatermarkAnglePreset(0, this)">0°</button>
+                                    <button type="button" class="svt-wm-chip active" data-angle="45" onclick="setPdfWatermarkAnglePreset(45, this)">45°</button>
+                                    <button type="button" class="svt-wm-chip" data-angle="-45" onclick="setPdfWatermarkAnglePreset(-45, this)">-45°</button>
+                                    <button type="button" class="svt-wm-chip" data-angle="90" onclick="setPdfWatermarkAnglePreset(90, this)">90°</button>
+                                </div>
+                            </div>
+
+                            <!-- Transparency Slider -->
+                            <div class="control-group">
+                                <div class="control-label"><span>Transparency</span><span id="pdfWmOpacityVal">40%</span></div>
+                                <input type="range" id="pdfWmOpacity" min="10" max="100" step="5" value="40" oninput="document.getElementById('pdfWmOpacityVal').textContent = this.value + '%'; updatePdfWatermarkPreview()">
+                            </div>
+
+                            <!-- Ink Color Swatches + Picker -->
+                            <div class="control-group" id="pdfWmColorGroup">
+                                <div class="control-label"><span>Ink Color</span></div>
+                                <div class="svt-wm-swatch-row" id="pdfWmSwatches">
+                                    <button type="button" class="svt-wm-swatch active" data-color="#475569" style="background:#475569;" onclick="setPdfWatermarkColorSwatch('#475569', this)" title="Slate Grey"></button>
+                                    <button type="button" class="svt-wm-swatch" data-color="#0f172a" style="background:#0f172a;" onclick="setPdfWatermarkColorSwatch('#0f172a', this)" title="Dark Ink"></button>
+                                    <button type="button" class="svt-wm-swatch" data-color="#7c3aed" style="background:#7c3aed;" onclick="setPdfWatermarkColorSwatch('#7c3aed', this)" title="Royal Violet"></button>
+                                    <button type="button" class="svt-wm-swatch" data-color="#dc2626" style="background:#dc2626;" onclick="setPdfWatermarkColorSwatch('#dc2626', this)" title="Stamp Red"></button>
+                                    <button type="button" class="svt-wm-swatch" data-color="#2563eb" style="background:#2563eb;" onclick="setPdfWatermarkColorSwatch('#2563eb', this)" title="Official Blue"></button>
+                                    <input type="color" id="pdfWmColor" value="#475569" oninput="syncPdfWatermarkColorPicker(this.value)" style="width:34px; height:26px; border:1px solid var(--border-light); border-radius:6px; cursor:pointer; padding:0; background:#ffffff;" title="Custom Color">
+                                </div>
+                            </div>
+
+                            <!-- Page Scope -->
+                            <div class="control-group">
+                                <div class="control-label"><span>Apply To Pages</span></div>
+                                <select id="pdfWmPageScope" onchange="togglePdfWmCustomRange()" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-light);">
+                                    <option value="all" selected>All Pages</option>
+                                    <option value="first">First Page Only</option>
+                                    <option value="custom">Custom Page Range</option>
+                                </select>
+                                <div id="pdfWmCustomRangeWrap" style="display:none; margin-top:6px;">
+                                    <input type="text" id="pdfWmCustomRange" placeholder="e.g. 1-3, 5" style="width:100%; padding:7px 9px; border-radius:6px; border:1px solid var(--border-light);">
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-download" id="pdfWmProcessBtn" disabled onclick="runPdfWatermark()" style="width:100%; margin-top:6px;">Export Watermarked PDF</button>
+                            <button type="button" class="btn-secondary-soft" id="pdfWmResetBtn" onclick="resetPdfWatermarkTool(true)" style="width:100%; margin-top:8px;">↺ Reset Settings</button>
+
+                            <div id="pdfWmStatusBox" class="svt-wm-status" style="display:none;"></div>
+                        </div>
                     </div>
 
                     <!-- Bottom Sticky Action Strip -->
@@ -1385,10 +1513,10 @@
 <script src="/browser-image-compression.js"></script>
 <script src="/trim-canvas.js"></script>
 <script src="/smart-optimizer.js?v=20261118d"></script>
-<script src="/script.js?v=20261118c"></script>
-<script src="/editor.js?v=20261118a"></script>
-<script src="/site-router.js?v=20261118b"></script>
+<script src="/script.js?v=20261119d"></script>
+<script src="/editor.js?v=20261119f"></script>
+<script src="/site-router.js?v=20261119d"></script>
 <script src="/pwa-controller.js"></script>
-<script src="/context-menu.js?v=20261118a"></script>
+<script src="/context-menu.js?v=20261119d"></script>
 </body>
 </html>

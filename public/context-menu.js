@@ -127,7 +127,8 @@
             return { kind: 'id-studio', label: 'ID Card Studio', tutorialId: 'id-tutorial' };
         }
         if (path === '/image-pdf-editor' || pageId === 'page-editor-studio') {
-            return { kind: 'image-editor', label: 'Image Editor', tutorialId: 'editor-tutorial' };
+            const label = window.TOOL === 'pdfwatermark' ? 'PDF Watermark' : 'Image Editor';
+            return { kind: 'image-editor', label, tutorialId: 'editor-tutorial' };
         }
         if (path === '/passport-photo-maker' || pageId === 'page-passport-maker') {
             return { kind: 'passport-maker', label: 'Passport Photo Maker', tutorialId: 'passport-technical-overview' };
@@ -187,7 +188,7 @@
             showToast('PDF Optimizer settings reset.');
         } else if (info.kind === 'image-editor' && typeof window.resetActiveEditorTool === 'function') {
             window.resetActiveEditorTool();
-            showToast('Image Editor reset to initial state.');
+            showToast(`${info.label} reset to initial state.`);
         } else if (info.kind === 'passport-maker') {
             if (typeof window.resetPassportEdits === 'function') {
                 window.resetPassportEdits();
@@ -215,7 +216,7 @@
             showToast('PDF Optimizer workspace cleared.');
         } else if (info.kind === 'image-editor' && typeof window.clearActiveEditorWork === 'function') {
             window.clearActiveEditorWork();
-            showToast('Image Editor workspace cleared.');
+            showToast(`${info.label} workspace cleared.`);
         } else if (info.kind === 'passport-maker' && typeof window.clearPassportWork === 'function') {
             window.clearPassportWork();
             showToast('Passport Photo Maker cleared.');

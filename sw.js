@@ -3,7 +3,7 @@
  * Complete offline caching for Document Studio, ID Card Studio, Image Editor & Passport Photo Maker
  */
 
-const CACHE_NAME = 'monu-offline-v2.8';
+const CACHE_NAME = 'monu-offline-v3.2';
 
 const PRECACHE_URLS = [
   '/',
@@ -66,7 +66,8 @@ const PRECACHE_URLS = [
 const EXTERNAL_CDNS = [
   'https://docs.opencv.org/4.5.4/opencv.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'
 ];
 
 self.addEventListener('install', (event) => {
