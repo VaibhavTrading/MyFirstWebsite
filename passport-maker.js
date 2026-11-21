@@ -1905,7 +1905,7 @@
         const options = [
             { icon: '🖼️', title: 'Image Editor', sub: 'Compress KB size, resize, watermark & convert format', action: sendPassportToImageEditor },
             { icon: '📄', title: 'Images to PDF Tool', sub: 'Compile passport photo inside Document Studio PDF compiler', action: sendPassportToPdf },
-            { icon: '📑', title: 'Download Print Sheet (PDF)', sub: 'Export exact-size A4 / 4×6 PDF for printing', action: () => downloadPassportPrintPdf() }
+            { icon: '📑', title: 'Download Print Sheet (PDF)', sub: 'Export standard-size A4 / 4×6 PDF for printing', action: () => downloadPassportPrintPdf() }
         ];
 
         const pop = document.createElement('div');

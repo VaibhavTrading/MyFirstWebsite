@@ -1241,7 +1241,7 @@
                         if (onProgress) {
                             onProgress({
                                 percent: 96,
-                                status: `Calibrating exact target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
+                                status: `Calibrating target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
                             });
                         }
                         let padLen = Math.max(0, deficit - 14);

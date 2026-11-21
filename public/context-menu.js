@@ -720,7 +720,7 @@
             onClick: async () => {
                 const shareData = {
                     title: document.title || 'SMART VLE TOOL',
-                    text: 'Free privacy-focused document scanner, ID card printer & image editor tools on SmartVLETool.in',
+                    text: 'Free-to-use browser-based document scanner, ID card printer & image editor tools on SmartVLETool.in',
                     url: window.location.href
                 };
                 if (navigator.share) {

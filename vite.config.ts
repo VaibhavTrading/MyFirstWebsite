@@ -43,7 +43,7 @@ export default defineConfig(() => {
           id: '/',
           name: 'SMART VLE TOOL – Online Document & ID Studio',
           short_name: 'smartvletool',
-          description: 'Privacy-focused Document Scanner, Perspective Correction, ID Card Layout Studio, Image Compressor & PDF Tools with selected offline capabilities.',
+          description: 'Browser-based Document Scanner, Perspective Correction, ID Card Layout Studio, Image Compressor, Passport Photo & PDF Tools.',
           theme_color: '#4338ca',
           background_color: '#0f172a',
           display: 'standalone',

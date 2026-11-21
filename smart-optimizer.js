@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * Monu Computers - Shared Smart Optimization Engine
+ * SMART VLE TOOL - Shared Smart Optimization Engine
  * Architecture:
  * - Source Image & PDF Analysis (Resolution, Megapixels, Aspect Ratio, Image Type)
  * - Document / Text / ID / Certificate Anti-Artifact Protection
@@ -1241,7 +1241,7 @@
                         if (onProgress) {
                             onProgress({
                                 percent: 96,
-                                status: `Calibrating exact target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
+                                status: `Calibrating target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
                             });
                         }
                         let padLen = Math.max(0, deficit - 14);

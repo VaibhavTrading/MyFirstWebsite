@@ -971,7 +971,7 @@ window.addEventListener('keydown', e => {
 
 // ═══ TOOL METADATA ═══
 const EDITOR_TOOLS_META = {
-    compress: { title: 'Compress / Increase Image', desc: 'Reduce or enlarge image file size with exact KB targeting & quality control.' },
+    compress: { title: 'Compress / Increase Image', desc: 'Reduce or enlarge image file size with target KB sizing & quality control.' },
     resize: { title: 'Resize Image Dimensions', desc: 'Set custom width and height in pixels while maintaining high visual quality.' },
     crop: { title: 'Crop, Flip & Rotate Canvas', desc: 'Crop with precise units and presets, flip horizontal/vertical, or rotate by custom angle.' },
     convert: { title: 'Format Converter', desc: 'Convert seamlessly between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats.' },
@@ -3115,7 +3115,7 @@ async function runImg2Pdf() {
             if (pBar) pBar.style.width = '100%';
             const blob = new Blob([result.buffer], { type: 'application/pdf' });
             const url = URL.createObjectURL(blob);
-            const defaultBase = 'monu_compiled_documents';
+            const defaultBase = 'smartvle_compiled_documents';
             const sizeKB = result.actualKB || (blob.size / 1024);
             const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(2)} MB` : `${sizeKB.toFixed(0)} KB`;
             const dimStr = `${img2pdfFiles.length} Page${img2pdfFiles.length !== 1 ? 's' : ''}`;
@@ -3704,7 +3704,7 @@ function downloadPDF() {
     if (!PDF_RESULT) { showEditorStatus('⚠️ Process PDF first.', 'err'); return; }
     const blob = new Blob([PDF_RESULT], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    const defaultBase = 'monu_optimized_sequence_' + (PDF_MODE === 'compress' ? 'compressed' : 'enhanced');
+    const defaultBase = 'smartvle_optimized_sequence_' + (PDF_MODE === 'compress' ? 'compressed' : 'enhanced');
     const sizeKB = blob.size / 1024;
     const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(2)} MB` : `${sizeKB.toFixed(0)} KB`;
     const dimStr = `${pdfOptPages.length} Page${pdfOptPages.length !== 1 ? 's' : ''}`;

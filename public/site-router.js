@@ -36,7 +36,7 @@
         '/': {
             pageId: 'page-home',
             title: 'SMART VLE TOOL – Free Online Image Editing & Document Tools',
-            description: 'Privacy-focused image editing, document enhancement, and PDF tools. Edit supported files directly in your browser with selected offline capabilities.',
+            description: 'Browser-based image editing, document enhancement, and PDF tools. Core editing operations run locally inside your web browser.',
             path: '/'
         },
         '/document-studio': {
@@ -49,14 +49,14 @@
         '/id-card-studio': {
             pageId: 'page-id-studio',
             title: 'ID Card Studio – Print Front & Back ID Card on One A4 Page',
-            description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards in exact card size on a single A4 page for instant printing. Best for VLE.',
+            description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards to standard card dimensions on a single A4 page for printing.',
             keywords: 'id card studio, front and back id card print on one page, aadhaar card print layout a4, straighten tilted id card, pvc card size print on a4, csc id card print tool',
             path: '/id-card-studio'
         },
         '/image-pdf-editor': {
             pageId: 'page-editor-studio',
             title: 'Image Editor – Online Image Resizer in KB, Crop, Convert & PDF Watermark',
-            description: 'Resize & compress images in exact KB with 300 DPI for government forms. Crop, adjust color, convert formats, and apply custom PDF watermarks online.',
+            description: 'Resize and compress images toward target KB limits at 300 DPI for online forms. Crop, adjust color, convert formats, and apply custom PDF watermarks online.',
             keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, pdf watermark',
             path: '/image-pdf-editor'
         },
@@ -70,13 +70,13 @@
         '/about': {
             pageId: 'page-about',
             title: 'About Us – SMART VLE TOOL Online Utility Platform',
-            description: 'Learn about SMART VLE TOOL: our mission, browser-based processing model, selected offline capabilities, and privacy-focused document processing.',
+            description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
             path: '/about-us'
         },
         '/about-us': {
             pageId: 'page-about',
             title: 'About Us – SMART VLE TOOL Online Utility Platform',
-            description: 'Learn about SMART VLE TOOL: our mission, browser-based processing model, selected offline capabilities, and privacy-focused document processing.',
+            description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
             path: '/about-us'
         },
         '/contact': {
