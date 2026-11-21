@@ -2760,7 +2760,7 @@ function saveAsImage() {
         return;
     }
     let dataUrl = activeCanvas.toDataURL('image/jpeg', 0.95);
-    let defaultBase = `Monu_Computers_Scan_${activeIndex + 1}`;
+    let defaultBase = `Smart_VLE_Scan_${activeIndex + 1}`;
     let estBytes = (dataUrl.split(',')[1] || '').length * 3 / 4;
     let estSizeStr = `~${(estBytes / 1024).toFixed(1)} KB`;
     let dimStr = `${activeCanvas.width} × ${activeCanvas.height} px`;
@@ -2790,7 +2790,7 @@ function saveAllToPDF() {
         const arrayBuf = pdf.output('arraybuffer');
         const blob = new Blob([arrayBuf], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
-        const defaultBase = 'Monu_Computers_Premium_Scans';
+        const defaultBase = 'Smart_VLE_Documents';
         const sizeKB = blob.size / 1024;
         const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(2)} MB` : `${sizeKB.toFixed(0)} KB`;
         const dimStr = `${imageArray.length} Page${imageArray.length !== 1 ? 's' : ''}`;

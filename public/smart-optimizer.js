@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * Monu Computers - Shared Smart Optimization Engine
+ * SMART VLE TOOL - Shared Smart Optimization Engine
  * Architecture:
  * - Source Image & PDF Analysis (Resolution, Megapixels, Aspect Ratio, Image Type)
  * - Document / Text / ID / Certificate Anti-Artifact Protection

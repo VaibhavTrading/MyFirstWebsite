@@ -230,7 +230,7 @@
                     </p>
                     <div class="hero-cta-group">
                         <a href="#explore-our-tools" class="btn-secondary-hero">
-                            <span>Explore All 3 Tools ↓</span>
+                            <span>Explore All Tools ↓</span>
                         </a>
                     </div>
                     <div class="hero-feature-tags">
@@ -259,6 +259,22 @@
                 </script>
             </div>
         </div>
+
+        <!-- Section: Homepage Introduction -->
+        <section class="section-wrapper bg-white" style="padding: 40px 20px; border-radius: 16px; margin: 24px auto; max-width: 1100px; border: 1px solid #f0e3e7;">
+            <div class="container-narrow" style="max-width: 860px; margin: 0 auto;">
+                <h2 style="font-size: 26px; font-weight: 800; color: #18181b; text-align: center; margin-bottom: 16px;">Online Tools for Everyday Document and Photo Work</h2>
+                <p style="font-size: 15.5px; line-height: 1.7; color: #3f3f46; margin-bottom: 16px;">
+                    <strong>SMART VLE TOOL</strong> was created with a simple idea: making everyday document and photo-related tasks easier.
+                </p>
+                <p style="font-size: 15.5px; line-height: 1.7; color: #3f3f46; margin-bottom: 16px;">
+                    Tasks such as ID card printing, document scanning and image compression are common requirements, but preparing files in the correct size, format and layout can take extra time.
+                </p>
+                <p style="font-size: 15.5px; line-height: 1.7; color: #3f3f46; margin: 0;">
+                    Our website brings together useful online tools for these requirements. From preparing passport-size photographs and resizing images to improving scanned documents and arranging ID cards for printing, you can find practical features in one place.
+                </p>
+            </div>
+        </section>
 
         <!-- Section: Explore Our Tools (3x3 SaaS Grid) -->
         <section class="section-wrapper explore-our-tools-section" id="explore-our-tools" aria-labelledby="explore-our-tools-heading">
@@ -2070,12 +2086,12 @@
             </section>
 
             <section class="legal-section">
-                <h2>Hybrid Architecture & In-Browser Processing</h2>
+                <h2>Client-Side In-Browser Processing Architecture</h2>
                 <p>
-                    The core foundation of SMART VLE TOOL is our hybrid browser + backend architecture. Core image calculations, perspective corrections, ID framing, and local conversions take place directly inside your browser memory with selected offline capabilities after initial page load.
+                    The core foundation of SMART VLE TOOL is our browser-first processing architecture. Core image calculations, perspective corrections, ID framing, compressions, and format conversions take place directly inside your device's web browser using HTML5 Canvas, OpenCV.js WebAssembly, and jsPDF.
                 </p>
                 <p>
-                    Advanced server-assisted operations utilize secure, short-lived temporary processing sessions when an active internet connection is available.
+                    Original user files are processed locally in your browser memory and are not uploaded to a remote server.
                 </p>
             </section>
 
@@ -2084,7 +2100,8 @@
                 <ul>
                     <li><strong>Document Studio:</strong> Fixes perspective distortion, removes shadows, and converts photos of paperwork into clean A4 digital scans.</li>
                     <li><strong>ID Card Studio:</strong> Provides dual-slot framing for standard ISO/IEC 7810 ID-1 cards with cutting trim marks for single or double A4 printing.</li>
-                    <li><strong>Image Editor:</strong> Offers precision KB compression, dimensional resizing, crop with angle presets, format conversion, and multi-page PDF watermarking.</li>
+                    <li><strong>Image Editor:</strong> Offers precision KB compression, dimensional resizing, crop with angle presets, format conversion, and text watermarking.</li>
+                    <li><strong>Passport Photo Maker:</strong> Helps users prepare passport-size photographs using available photo dimensions, background removal, custom background colours, and printing layouts. Users should verify required dimensions with their specific application guidelines.</li>
                 </ul>
             </section>
 
@@ -2093,7 +2110,7 @@
                 <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-top:12px;">
                     <h3 style="font-size:15px; font-weight:800; color:#0f172a; margin:0 0 6px;">Which features require an Internet connection?</h3>
                     <p style="font-size:13.5px; color:#475569; margin:0; line-height:1.6;">
-                        Initial website loading, Google AdSense advertisement delivery, and temporary backend processing sessions require an active internet connection. Core browser-based image editing, perspective warping, ID card framing, and local PDF exports remain available offline after initial page load.
+                        Initial website loading, third-party libraries, CDN resources, and Google AdSense advertisement delivery require an active internet connection. Core browser-based image editing, perspective warping, ID card framing, and local PDF exports execute locally within your browser.
                     </p>
                 </div>
             </section>

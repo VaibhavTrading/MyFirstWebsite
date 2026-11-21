@@ -1,5 +1,5 @@
 /**
- * MONU COMPUTERS - PWA & Offline Engine Controller (Background Caching Only)
+ * SMART VLE TOOL - PWA & Offline Engine Controller (Background Caching Only)
  * Manages Service Worker registration and cache pre-warming silently in the background
  * without user-facing banners, badges, or install buttons.
  */
