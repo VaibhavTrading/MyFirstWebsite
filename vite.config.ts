@@ -466,6 +466,9 @@ function smartvleStaticRoutesPlugin(): Plugin {
 `;
       fs.writeFileSync(path.join(distDir, '404.html'), notFoundHtml, 'utf-8');
 
+      // Ensure .nojekyll exists in dist for GitHub Pages compatibility
+      fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf-8');
+
       // Copy CNAME for GitHub Pages custom domain
       const cnameSrc = path.resolve(__dirname, 'CNAME');
       if (fs.existsSync(cnameSrc)) {

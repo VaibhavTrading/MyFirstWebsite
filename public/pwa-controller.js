@@ -1,27 +1,22 @@
 /**
  * SMART VLE TOOL - PWA & Offline Engine Controller (Background Caching Only)
- * Manages Service Worker registration and cache pre-warming silently in the background
- * without user-facing banners, badges, or install buttons.
+ * Unregisters stale Service Workers so direct URLs and GitHub Pages routes always load fresh HTML.
  */
 
 (function () {
-  // Register Service Worker silently in the background
-  function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((registration) => {
-            console.log('[PWA] Service Worker registered with scope:', registration.scope);
-          })
-          .catch((err) => {
-            console.warn('[PWA] Service Worker registration failed:', err);
+  function cleanupStaleServiceWorkers() {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (reg) {
+            reg.unregister().catch(function () {});
           });
+        }).catch(function () {});
       });
     }
   }
 
-  registerServiceWorker();
+  cleanupStaleServiceWorkers();
 
   window.PWAController = {
     openOfflineModal: function() {}
