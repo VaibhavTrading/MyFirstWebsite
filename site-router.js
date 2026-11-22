@@ -336,12 +336,47 @@
             return { route: ROUTES['/image-pdf-editor'], resolvedPath: '/image-pdf-editor', canonicalPath: '/image-compress' };
         }
 
-        const matched = ROUTES[pathname] || ROUTES['/'];
+        const matched = ROUTES[pathname] || null;
         return {
             route: matched,
-            resolvedPath: ROUTES[pathname] ? pathname : '/',
-            canonicalPath: matched.canonical || matched.path || pathname
+            resolvedPath: matched ? pathname : pathname,
+            canonicalPath: matched ? (matched.canonical || matched.path || pathname) : pathname,
+            isNotFound: !matched
         };
+    }
+
+    function setRobotsMeta(content) {
+        let metaRobots = document.querySelector('meta[name="robots"]');
+        if (!content) {
+            if (metaRobots) metaRobots.remove();
+            return;
+        }
+        if (!metaRobots) {
+            metaRobots = document.createElement('meta');
+            metaRobots.name = 'robots';
+            document.head.appendChild(metaRobots);
+        }
+        metaRobots.content = content;
+    }
+
+    function renderNotFoundView(requestedPath) {
+        const cleanReq = normalizePath(requestedPath || window.location.pathname || '/');
+        document.querySelectorAll('.page-view').forEach(p => p.classList.add('hidden'));
+        const sharedWs = document.getElementById('shared-studio-workspace') || document.getElementById('page-studio-workspace');
+        if (sharedWs) {
+            sharedWs.classList.add('hidden');
+            sharedWs.style.display = 'none';
+        }
+        const nfPage = document.getElementById('page-not-found');
+        if (nfPage) {
+            nfPage.classList.remove('hidden');
+            const pathCode = document.getElementById('not-found-path');
+            if (pathCode) pathCode.textContent = cleanReq;
+        }
+        document.title = '404 – Page Not Found | SMART VLE TOOL';
+        setRobotsMeta('noindex, nofollow');
+        updateNavHighlights('');
+        currentRoutePath = cleanReq;
     }
 
     function updatePageHeroDetails(pageEl, routeInfo) {
@@ -540,7 +575,16 @@
         if (resolution.redirectUrl) {
             return navigateTo(resolution.redirectUrl + (hash || ''), push);
         }
+        if (resolution.isNotFound || !resolution.route) {
+            if (push && (window.location.pathname + window.location.search + window.location.hash) !== url) {
+                window.history.pushState({ path: pathname, search: search, hash: hash }, '404 – Page Not Found | SMART VLE TOOL', url);
+                _spaHistoryCount++;
+            }
+            renderNotFoundView(pathname);
+            return;
+        }
 
+        setRobotsMeta(null);
         const route = resolution.route;
         const resolvedPath = resolution.resolvedPath;
 
@@ -835,10 +879,12 @@
             const redirectPath = urlParams.get('p') || '/';
             const cleanTarget = normalizePath(redirectPath);
             const parsedRedirect = parseUrl(cleanTarget);
-            const targetHistoryUrl = ROUTES[parsedRedirect.pathname]
-                ? (cleanTarget + window.location.hash)
-                : ('/' + window.location.hash);
-            window.history.replaceState({ path: parsedRedirect.pathname }, '', targetHistoryUrl);
+            if (ROUTES[parsedRedirect.pathname]) {
+                window.history.replaceState({ path: parsedRedirect.pathname }, '', cleanTarget + window.location.hash);
+            } else {
+                renderNotFoundView(parsedRedirect.pathname);
+                return;
+            }
         }
 
         // Initial Route Resolution on Load
@@ -847,8 +893,7 @@
         if (ROUTES[parsed.pathname]) {
             navigateTo(initialFullUrl, false);
         } else {
-            window.history.replaceState({ path: '/' }, '', '/' + (parsed.hash || ''));
-            navigateTo('/' + (parsed.hash || ''), false);
+            renderNotFoundView(parsed.pathname);
         }
 
         // Re-check visible ads once full page layout / CSS completes and on resize >= 1200px

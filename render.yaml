@@ -25,5 +25,134 @@ services:
         value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://docs.opencv.org https://cdnjs.cloudflare.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' data: blob: https:; worker-src 'self' blob:; frame-ancestors 'none';"
     routes:
       - type: rewrite
-        source: /*
-        destination: /index.html
+        source: /document-enhance
+        destination: /document-enhance/index.html
+      - type: rewrite
+        source: /document-enhance/
+        destination: /document-enhance/index.html
+      - type: rewrite
+        source: /image-to-pdf
+        destination: /image-to-pdf/index.html
+      - type: rewrite
+        source: /image-to-pdf/
+        destination: /image-to-pdf/index.html
+      - type: rewrite
+        source: /pdf-compress
+        destination: /pdf-compress/index.html
+      - type: rewrite
+        source: /pdf-compress/
+        destination: /pdf-compress/index.html
+      - type: rewrite
+        source: /document-studio
+        destination: /document-studio/index.html
+      - type: rewrite
+        source: /document-studio/
+        destination: /document-studio/index.html
+      - type: rewrite
+        source: /id-card-print
+        destination: /id-card-print/index.html
+      - type: rewrite
+        source: /id-card-print/
+        destination: /id-card-print/index.html
+      - type: rewrite
+        source: /id-card-studio
+        destination: /id-card-studio/index.html
+      - type: rewrite
+        source: /id-card-studio/
+        destination: /id-card-studio/index.html
+      - type: rewrite
+        source: /image-compress
+        destination: /image-compress/index.html
+      - type: rewrite
+        source: /image-compress/
+        destination: /image-compress/index.html
+      - type: rewrite
+        source: /photo-resize
+        destination: /photo-resize/index.html
+      - type: rewrite
+        source: /photo-resize/
+        destination: /photo-resize/index.html
+      - type: rewrite
+        source: /image-crop
+        destination: /image-crop/index.html
+      - type: rewrite
+        source: /image-crop/
+        destination: /image-crop/index.html
+      - type: rewrite
+        source: /image-convert
+        destination: /image-convert/index.html
+      - type: rewrite
+        source: /image-convert/
+        destination: /image-convert/index.html
+      - type: rewrite
+        source: /image-adjust
+        destination: /image-adjust/index.html
+      - type: rewrite
+        source: /image-adjust/
+        destination: /image-adjust/index.html
+      - type: rewrite
+        source: /pdf-watermark
+        destination: /pdf-watermark/index.html
+      - type: rewrite
+        source: /pdf-watermark/
+        destination: /pdf-watermark/index.html
+      - type: rewrite
+        source: /image-pdf-editor
+        destination: /image-pdf-editor/index.html
+      - type: rewrite
+        source: /image-pdf-editor/
+        destination: /image-pdf-editor/index.html
+      - type: rewrite
+        source: /passport-photo-maker
+        destination: /passport-photo-maker/index.html
+      - type: rewrite
+        source: /passport-photo-maker/
+        destination: /passport-photo-maker/index.html
+      - type: rewrite
+        source: /about
+        destination: /about/index.html
+      - type: rewrite
+        source: /about/
+        destination: /about/index.html
+      - type: rewrite
+        source: /about-us
+        destination: /about-us/index.html
+      - type: rewrite
+        source: /about-us/
+        destination: /about-us/index.html
+      - type: rewrite
+        source: /contact
+        destination: /contact/index.html
+      - type: rewrite
+        source: /contact/
+        destination: /contact/index.html
+      - type: rewrite
+        source: /contact-us
+        destination: /contact-us/index.html
+      - type: rewrite
+        source: /contact-us/
+        destination: /contact-us/index.html
+      - type: rewrite
+        source: /privacy-policy
+        destination: /privacy-policy/index.html
+      - type: rewrite
+        source: /privacy-policy/
+        destination: /privacy-policy/index.html
+      - type: rewrite
+        source: /terms-and-conditions
+        destination: /terms-and-conditions/index.html
+      - type: rewrite
+        source: /terms-and-conditions/
+        destination: /terms-and-conditions/index.html
+      - type: rewrite
+        source: /copyright-policy
+        destination: /copyright-policy/index.html
+      - type: rewrite
+        source: /copyright-policy/
+        destination: /copyright-policy/index.html
+      - type: rewrite
+        source: /disclaimer
+        destination: /disclaimer/index.html
+      - type: rewrite
+        source: /disclaimer/
+        destination: /disclaimer/index.html

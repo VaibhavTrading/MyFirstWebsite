@@ -248,9 +248,59 @@ function escapeHtmlText(val: string): string {
 }
 
 function smartvleStaticRoutesPlugin(): Plugin {
+  const knownSlugSet = new Set(STATIC_ROUTE_META.map(r => r.slug));
+
   return {
     name: 'smartvle-static-routes-generator',
-    apply: 'build',
+    configurePreviewServer(server) {
+      const distDir = path.resolve(__dirname, 'dist');
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || (req.method !== 'GET' && req.method !== 'HEAD')) {
+          return next();
+        }
+        const urlObj = new URL(req.url, 'http://localhost');
+        let pathname = decodeURIComponent(urlObj.pathname || '/');
+        if (pathname.length > 1 && pathname.endsWith('/')) {
+          pathname = pathname.slice(0, -1);
+        }
+
+        if (pathname === '/' || pathname === '/index.html') {
+          const idxFile = path.join(distDir, 'index.html');
+          if (fs.existsSync(idxFile)) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            fs.createReadStream(idxFile).pipe(res);
+            return;
+          }
+          return next();
+        }
+
+        if (knownSlugSet.has(pathname)) {
+          const slug = pathname.replace(/^\/+/, '');
+          const routeFile = path.join(distDir, slug, 'index.html');
+          if (fs.existsSync(routeFile)) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            fs.createReadStream(routeFile).pipe(res);
+            return;
+          }
+        }
+
+        const candidateFile = path.join(distDir, pathname.replace(/^\/+/, ''));
+        if (fs.existsSync(candidateFile) && fs.statSync(candidateFile).isFile()) {
+          return next();
+        }
+
+        const notFoundFile = path.join(distDir, '404.html');
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        if (fs.existsSync(notFoundFile)) {
+          fs.createReadStream(notFoundFile).pipe(res);
+        } else {
+          res.end('<!DOCTYPE html><html><head><title>404 – Page Not Found</title></head><body><h1>404 – Page Not Found</h1></body></html>');
+        }
+      });
+    },
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
       const baseHtmlPath = path.join(distDir, 'index.html');
@@ -362,29 +412,55 @@ function smartvleStaticRoutesPlugin(): Plugin {
           }
         }
 
-        const routeDir = path.join(distDir, route.slug.replace(/^\/+/, ''));
+        const cleanSlug = route.slug.replace(/^\/+/, '');
+        const routeDir = path.join(distDir, cleanSlug);
         fs.mkdirSync(routeDir, { recursive: true });
         fs.writeFileSync(path.join(routeDir, 'index.html'), html, 'utf-8');
+        fs.writeFileSync(path.join(distDir, `${cleanSlug}.html`), html, 'utf-8');
       }
 
-      // GitHub Pages static fallback 404.html preserving full path + query + hash
+      const knownPathsJson = JSON.stringify(STATIC_ROUTE_META.map(r => r.slug));
+
+      // Static 404.html: only recovers known routes if a host skipped directory routing; displays genuine 404 for unknown URLs
       const notFoundHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMART VLE TOOL</title>
-  <meta name="robots" content="noindex">
+  <title>404 – Page Not Found | SMART VLE TOOL</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #f8fafc; color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; box-sizing: border-box; }
+    .nf-card { max-width: 560px; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 36px 28px; text-align: center; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+    .nf-code { font-size: 52px; font-weight: 800; color: #4338ca; line-height: 1; margin-bottom: 10px; }
+    h1 { font-size: 24px; margin: 0 0 10px; }
+    p { font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 22px; }
+    .nf-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .nf-btn { display: inline-block; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1; }
+    .nf-btn.primary { background: #4338ca; color: #ffffff; border-color: #4338ca; }
+  </style>
   <script>
     (function () {
-      var target = location.pathname + location.search;
-      var hash = location.hash || '';
-      location.replace('/?p=' + encodeURIComponent(target) + hash);
+      var known = ${knownPathsJson};
+      var clean = (location.pathname || '/').replace(/\\/+$/, '') || '/';
+      if (known.indexOf(clean) !== -1) {
+        location.replace('/?p=' + encodeURIComponent(location.pathname + location.search) + (location.hash || ''));
+      }
     })();
   </script>
 </head>
 <body>
-  <p>Redirecting to SMART VLE TOOL...</p>
+  <main class="nf-card">
+    <div class="nf-code">404</div>
+    <h1>Page Not Found</h1>
+    <p>The page or tool URL you requested could not be found on SMART VLE TOOL. Use one of the verified tool links below to continue.</p>
+    <div class="nf-actions">
+      <a class="nf-btn primary" href="/">Go to Homepage</a>
+      <a class="nf-btn" href="/document-enhance">Document Enhancer</a>
+      <a class="nf-btn" href="/image-compress">Image Compressor</a>
+      <a class="nf-btn" href="/passport-photo-maker">Passport Photo Maker</a>
+    </div>
+  </main>
 </body>
 </html>
 `;
@@ -468,6 +544,7 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2,json}'],
+          globIgnores: ['**/*.html', '!index.html', '!404.html'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           skipWaiting: true,
           clientsClaim: true,

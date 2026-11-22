@@ -198,6 +198,16 @@ async function startServer() {
     '/disclaimer'
   ];
 
+  app.get(['/', '/index.html'], (req, res) => {
+    const distIndex = path.resolve(__dirname, 'dist/index.html');
+    const rootIndex = path.resolve(__dirname, 'index.html');
+    const target = fs.existsSync(distIndex) ? distIndex : rootIndex;
+    if (fs.existsSync(target)) {
+      return res.sendFile(target);
+    }
+    res.status(404).send('Index page not found. Please build the application.');
+  });
+
   app.get(CLEAN_HTML_ROUTES, (req, res) => {
     const cleanSlug = req.path.replace(/^\/+|\/+$/g, '');
     const distRouteFile = path.resolve(__dirname, 'dist', cleanSlug, 'index.html');
@@ -214,17 +224,13 @@ async function startServer() {
     res.status(404).send('Page not found.');
   });
 
-  // Fallback HTML navigation handler
+  // Fallback 404 handler for unknown URLs
   app.get('*', (req, res) => {
-    const distIndex = path.resolve(__dirname, 'dist/index.html');
-    if (fs.existsSync(distIndex)) {
-      return res.sendFile(distIndex);
+    const dist404 = path.resolve(__dirname, 'dist/404.html');
+    if (fs.existsSync(dist404)) {
+      return res.status(404).sendFile(dist404);
     }
-    const rootIndex = path.resolve(__dirname, 'index.html');
-    if (fs.existsSync(rootIndex)) {
-      return res.sendFile(rootIndex);
-    }
-    res.status(404).send('Index page not found. Please build the application.');
+    res.status(404).send('<!DOCTYPE html><html><head><title>404 – Page Not Found | SMART VLE TOOL</title></head><body><h1>404 – Page Not Found</h1></body></html>');
   });
 
   const server = app.listen(Number(PORT), '0.0.0.0', () => {
