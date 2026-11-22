@@ -35,86 +35,261 @@
     const ROUTES = {
         '/': {
             pageId: 'page-home',
+            navPath: '/',
             title: 'SMART VLE TOOL – Free Online Image Editing & Document Tools',
             description: 'Browser-based image editing, document enhancement, and PDF tools. Core editing operations run locally inside your web browser.',
             path: '/'
         },
+        '/document-enhance': {
+            pageId: 'page-doc-studio',
+            mode: 'DOC',
+            subTool: 'scanner',
+            navPath: '/document-enhance',
+            title: 'Document Enhancer – Remove Shadows & Clean Scanned Docs | SMART VLE TOOL',
+            description: 'Straighten tilted scans, remove dark mobile shadows, brighten backgrounds, and produce crisp A4 printouts locally in your browser.',
+            keywords: 'document enhancer, remove shadow from document online, clean scanned document for print, whiten document background, mobile photo to scan print, vle document cleaner',
+            h1: 'Document Studio – Document Enhancer',
+            heroDesc: 'Straighten tilted mobile photos, remove dark shadows, adjust contrast and brightness, and export crisp A4 printouts or enhanced scans locally inside your browser.',
+            breadcrumb: 'Document Enhancer',
+            path: '/document-enhance'
+        },
+        '/image-to-pdf': {
+            pageId: 'page-doc-studio',
+            mode: 'DOC',
+            subTool: 'img2pdf',
+            navPath: '/document-enhance',
+            title: 'Images to PDF – Combine Photos into a Multi-Page PDF | SMART VLE TOOL',
+            description: 'Compile multiple scanned documents or images into one properly sized A4/Letter multi-page PDF with custom margins, rotation, and target file size.',
+            keywords: 'image to pdf, jpg to pdf converter online, combine images into pdf, multi page pdf creator, vle pdf compiler',
+            h1: 'Images to PDF – Multi-Page PDF Compiler',
+            heroDesc: 'Combine multiple scanned pages or photos into one ordered PDF document with page rotation, custom margins, page numbers, and target KB/MB optimization.',
+            breadcrumb: 'Images to PDF',
+            path: '/image-to-pdf'
+        },
+        '/pdf-compress': {
+            pageId: 'page-doc-studio',
+            mode: 'DOC',
+            subTool: 'pdfcompress',
+            navPath: '/document-enhance',
+            title: 'PDF Optimizer – Organize, Rotate & Compress PDF Files | SMART VLE TOOL',
+            description: 'Reorder, rotate, merge, compress, or boost PDF file sizes inside your browser for government portals, scholarship uploads, and document submissions.',
+            keywords: 'pdf compressor, pdf optimizer, reduce pdf file size in kb, organize pdf pages, reorder delete pdf pages, compress pdf online',
+            h1: 'PDF Optimizer – Organize & Compress PDF',
+            heroDesc: 'Reorder, rotate, merge, remove pages, and compress multi-page PDF files toward exact KB/MB limits locally inside your browser.',
+            breadcrumb: 'PDF Optimizer',
+            path: '/pdf-compress'
+        },
         '/document-studio': {
             pageId: 'page-doc-studio',
-            title: 'Document Studio – Remove Shadow & Clean Scanned Docs Online',
-            description: 'Clean mobile-captured documents online. Remove dark shadows, fix background brightness, straighten tilted scans, and get crystal clear printouts for VLE work.',
-            keywords: 'document studio, remove shadow from document online, clean scanned document for print, whiten document background, mobile photo to scan print, vle document cleaner',
-            path: '/document-studio'
+            mode: 'DOC',
+            subTool: 'scanner',
+            navPath: '/document-enhance',
+            canonical: '/document-enhance',
+            title: 'Document Studio – Document Enhancer, Images to PDF & PDF Optimizer',
+            description: 'Clean mobile-captured documents online. Straighten tilted scans, remove shadows, compile images to PDF, and compress PDF files locally in your browser.',
+            keywords: 'document studio, document enhancer, remove shadow from document online, image to pdf, pdf optimizer',
+            h1: 'Document Studio',
+            heroDesc: 'Document Studio brings three everyday document workflows into one browser-based workspace: Document Enhancer for straightening and cleaning photographed papers, Images to PDF for compiling multiple photos into a multi-page PDF, and PDF Optimizer for organizing pages and compressing PDF files.',
+            breadcrumb: 'Document Studio',
+            path: '/document-enhance'
+        },
+        '/id-card-print': {
+            pageId: 'page-id-studio',
+            mode: 'ID',
+            navPath: '/id-card-print',
+            title: 'ID Card Studio – Print Front & Back ID Card on One A4 Page',
+            description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards to standard card dimensions on a single A4 page for printing.',
+            keywords: 'id card print, front and back id card print on one page, aadhaar card print layout a4, straighten tilted id card, pvc card size print on a4, csc id card print tool',
+            h1: 'ID Card Studio – Dual-Slot Identity Card Framing & A4 Print Layout',
+            heroDesc: 'Clean, crop, and align Front and Back ID card sides to exact CR80 card proportions on a single printable A4 layout sheet inside your browser.',
+            breadcrumb: 'ID Card Studio',
+            path: '/id-card-print'
         },
         '/id-card-studio': {
             pageId: 'page-id-studio',
+            mode: 'ID',
+            navPath: '/id-card-print',
+            canonical: '/id-card-print',
             title: 'ID Card Studio – Print Front & Back ID Card on One A4 Page',
             description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards to standard card dimensions on a single A4 page for printing.',
             keywords: 'id card studio, front and back id card print on one page, aadhaar card print layout a4, straighten tilted id card, pvc card size print on a4, csc id card print tool',
-            path: '/id-card-studio'
+            h1: 'ID Card Studio – Dual-Slot Identity Card Framing & A4 Print Layout',
+            breadcrumb: 'ID Card Studio',
+            path: '/id-card-print'
+        },
+        '/image-compress': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'compress',
+            navPath: '/image-compress',
+            title: 'Compress or Increase Image Size in KB Online | SMART VLE TOOL',
+            description: 'Compress or increase image file size to exact KB targets at 300 DPI for SSC, UPSC, PAN, and government job forms directly in your browser.',
+            keywords: 'image compress in kb, reduce image size kb, increase image size in kb, 20kb 50kb photo compressor, 300 dpi photo compress',
+            h1: 'Compress / Increase Image Size in KB',
+            heroDesc: 'Compress or increase JPG, PNG, and WEBP images to exact target KB limits with optional 300 DPI metadata and visual clarity.',
+            breadcrumb: 'Compress / Increase KB',
+            path: '/image-compress'
+        },
+        '/photo-resize': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'resize',
+            navPath: '/image-compress',
+            title: 'Photo & Signature Resizer in Pixels, CM, MM & Inches | SMART VLE TOOL',
+            description: 'Resize passport photos, signatures, and application images to exact pixel, centimeter, millimeter, or inch dimensions locally in your browser.',
+            keywords: 'photo resize, signature resizer, resize image in pixels cm mm inches, online form photo resizer',
+            h1: 'Photo & Signature Resizer',
+            heroDesc: 'Resize photos and signatures accurately across Pixels (px), Inches (in), Centimeters (cm), and Millimeters (mm) with aspect ratio locking.',
+            breadcrumb: 'Photo & Signature Resizer',
+            path: '/photo-resize'
+        },
+        '/image-crop': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'crop',
+            navPath: '/image-compress',
+            title: 'Crop, Flip & Rotate Image Online with Precision | SMART VLE TOOL',
+            description: 'Crop photos to preset or custom dimensions, trim white margins automatically, flip horizontally/vertically, and rotate by any angle in your browser.',
+            keywords: 'image crop online, rotate image custom angle, flip image horizontally vertically, passport size crop',
+            h1: 'Crop, Flip & Rotate Image',
+            heroDesc: 'Crop images cleanly using interactive handles or exact measurements, flip horizontally or vertically, and straighten tilted images.',
+            breadcrumb: 'Crop, Flip & Rotate',
+            path: '/image-crop'
+        },
+        '/image-convert': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'convert',
+            navPath: '/image-compress',
+            title: 'Image Format Converter – JPG, PNG, WEBP, BMP & AVIF | SMART VLE TOOL',
+            description: 'Convert images seamlessly between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats with quality and target KB controls inside your browser.',
+            keywords: 'image format converter, png to jpg, webp to jpg, convert image format online',
+            h1: 'Image Format Converter',
+            heroDesc: 'Convert photos and scanned documents between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats with instant preview and target KB tuning.',
+            breadcrumb: 'Format Converter',
+            path: '/image-convert'
+        },
+        '/image-adjust': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'brightness',
+            navPath: '/image-compress',
+            title: 'Adjust Image Brightness, Contrast & RGB Color Balance | SMART VLE TOOL',
+            description: 'Fine-tune photo brightness, contrast, saturation, hue, and Shadows/Midtones/Highlights RGB color balance directly in your web browser.',
+            keywords: 'adjust brightness contrast online, image color balance, rgb adjustment photo tool',
+            h1: 'Adjust Color & RGB Balance',
+            heroDesc: 'Tune brightness, contrast, saturation, hue, and professional Shadows/Midtones/Highlights RGB balance in real time.',
+            breadcrumb: 'Adjust Color & RGB',
+            path: '/image-adjust'
+        },
+        '/pdf-watermark': {
+            pageId: 'page-editor-studio',
+            mode: 'EDITOR',
+            editorTool: 'pdfwatermark',
+            navPath: '/image-compress',
+            title: 'PDF Watermark – Add Text or Logo Watermarks to PDF | SMART VLE TOOL',
+            description: 'Stamp custom text or logo watermarks onto single or multiple PDF pages with tiled grid or anchor layouts and live browser preview.',
+            keywords: 'pdf watermark online, add text watermark to pdf, add logo watermark pdf, confidential pdf stamp',
+            h1: 'PDF Watermark Tool',
+            heroDesc: 'Apply customizable text or logo watermarks in single-anchor or tiled grids across selected or all PDF pages locally in your browser.',
+            breadcrumb: 'PDF Watermark',
+            path: '/pdf-watermark'
         },
         '/image-pdf-editor': {
             pageId: 'page-editor-studio',
-            title: 'Image Editor – Online Image Resizer in KB, Crop, Convert & PDF Watermark',
+            mode: 'EDITOR',
+            editorTool: 'compress',
+            navPath: '/image-compress',
+            canonical: '/image-compress',
+            title: 'Image Editor – Compress to KB, Resize, Crop, Convert & PDF Watermark',
             description: 'Resize and compress images toward target KB limits at 300 DPI for online forms. Crop, adjust color, convert formats, and apply custom PDF watermarks online.',
             keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, pdf watermark',
-            path: '/image-pdf-editor'
+            h1: 'Image Editor – Compress to KB, Resize, Crop & Convert',
+            breadcrumb: 'Image Editor',
+            path: '/image-compress'
         },
         '/passport-photo-maker': {
             pageId: 'page-passport-maker',
+            mode: 'PASSPORT',
+            navPath: '/passport-photo-maker',
             title: 'Passport Photo Maker – Remove Background & Print Photos Online',
             description: 'Remove photo backgrounds, change background color (white, light blue, cream), crop to passport size, and print photo sheets.',
             keywords: 'passport photo maker, remove background passport photo, passport size photo online, change passport background color',
+            h1: 'Passport Photo Maker',
+            breadcrumb: 'Passport Photo Maker',
             path: '/passport-photo-maker'
         },
         '/about': {
             pageId: 'page-about',
+            navPath: '/about-us',
             title: 'About Us – SMART VLE TOOL Online Utility Platform',
             description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
             path: '/about-us'
         },
         '/about-us': {
             pageId: 'page-about',
+            navPath: '/about-us',
             title: 'About Us – SMART VLE TOOL Online Utility Platform',
             description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
             path: '/about-us'
         },
         '/contact': {
             pageId: 'page-contact',
+            navPath: '/contact-us',
             title: 'Contact Us – SMART VLE TOOL Support & Feedback',
             description: 'Get in touch with the SMART VLE TOOL team for support, feature feedback, technical questions, or general inquiries regarding our utility suite.',
             path: '/contact-us'
         },
         '/contact-us': {
             pageId: 'page-contact',
+            navPath: '/contact-us',
             title: 'Contact Us – SMART VLE TOOL Support & Feedback',
             description: 'Get in touch with the SMART VLE TOOL team for support, feature feedback, technical questions, or general inquiries regarding our utility suite.',
             path: '/contact-us'
         },
         '/privacy-policy': {
             pageId: 'page-privacy',
+            navPath: '/privacy-policy',
             title: 'Privacy Policy – SMART VLE TOOL Data Protection Practices',
             description: 'Read our transparent privacy policy. Discover how SMART VLE TOOL processes supported files in-browser, local storage data management, and AdSense disclosures.',
             path: '/privacy-policy'
         },
         '/terms-and-conditions': {
             pageId: 'page-terms',
+            navPath: '/terms-and-conditions',
             title: 'Terms and Conditions – SMART VLE TOOL',
             description: 'Review the terms and conditions for using SMART VLE TOOL online image editing, scanned document enhancement, and PDF tools.',
             path: '/terms-and-conditions'
         },
         '/copyright-policy': {
             pageId: 'page-copyright',
+            navPath: '/copyright-policy',
             title: 'Copyright Policy – SMART VLE TOOL',
             description: 'Review our copyright policy, user ownership of uploaded files, DMCA notice procedures, and intellectual property guidelines.',
             path: '/copyright-policy'
         },
         '/disclaimer': {
             pageId: 'page-disclaimer',
+            navPath: '/disclaimer',
             title: 'Disclaimer – SMART VLE TOOL',
             description: 'Important legal and utility disclaimer regarding document processing quality, non-affiliation with government entities, and user verification responsibilities.',
             path: '/disclaimer'
         }
+    };
+
+    const DOC_SUBTOOL_URLS = {
+        scanner: '/document-enhance',
+        img2pdf: '/image-to-pdf',
+        pdfcompress: '/pdf-compress'
+    };
+
+    const EDITOR_TOOL_URLS = {
+        compress: '/image-compress',
+        resize: '/photo-resize',
+        crop: '/image-crop',
+        convert: '/image-convert',
+        brightness: '/image-adjust',
+        pdfwatermark: '/pdf-watermark'
     };
 
     let currentRoutePath = '/';
@@ -139,7 +314,53 @@
         return { pathname, search, hash };
     }
 
-    function updateMetaTags(routeInfo) {
+    function resolveToolRoute(pathname, search) {
+        const params = search ? new URLSearchParams(search) : null;
+        const requestedTool = params ? (params.get('tool') || '') : '';
+
+        if (pathname === '/document-studio') {
+            if (requestedTool === 'img2pdf') return { route: ROUTES['/image-to-pdf'], resolvedPath: '/document-studio', canonicalPath: '/image-to-pdf' };
+            if (requestedTool === 'pdfcompress') return { route: ROUTES['/pdf-compress'], resolvedPath: '/document-studio', canonicalPath: '/pdf-compress' };
+            if (requestedTool === 'pdfwatermark') return { route: ROUTES['/pdf-watermark'], resolvedPath: '/pdf-watermark', canonicalPath: '/pdf-watermark', redirectUrl: '/pdf-watermark' };
+            return { route: ROUTES['/document-studio'], resolvedPath: '/document-studio', canonicalPath: '/document-enhance' };
+        }
+
+        if (pathname === '/image-pdf-editor') {
+            if (requestedTool === 'img2pdf') return { route: ROUTES['/image-to-pdf'], resolvedPath: '/image-to-pdf', canonicalPath: '/image-to-pdf', redirectUrl: '/image-to-pdf' };
+            if (requestedTool === 'pdfcompress') return { route: ROUTES['/pdf-compress'], resolvedPath: '/pdf-compress', canonicalPath: '/pdf-compress', redirectUrl: '/pdf-compress' };
+            const normalized = requestedTool === 'watermark' ? 'pdfwatermark' : requestedTool;
+            if (normalized && EDITOR_TOOL_URLS[normalized]) {
+                const targetSlug = EDITOR_TOOL_URLS[normalized];
+                return { route: ROUTES[targetSlug], resolvedPath: '/image-pdf-editor', canonicalPath: targetSlug };
+            }
+            return { route: ROUTES['/image-pdf-editor'], resolvedPath: '/image-pdf-editor', canonicalPath: '/image-compress' };
+        }
+
+        const matched = ROUTES[pathname] || ROUTES['/'];
+        return {
+            route: matched,
+            resolvedPath: ROUTES[pathname] ? pathname : '/',
+            canonicalPath: matched.canonical || matched.path || pathname
+        };
+    }
+
+    function updatePageHeroDetails(pageEl, routeInfo) {
+        if (!pageEl || !routeInfo) return;
+        if (routeInfo.breadcrumb) {
+            const bc = pageEl.querySelector('.breadcrumb-current');
+            if (bc) bc.textContent = routeInfo.breadcrumb;
+        }
+        if (routeInfo.h1) {
+            const h1 = pageEl.querySelector('.tool-intro-h1, h1');
+            if (h1) h1.textContent = routeInfo.h1;
+        }
+        if (routeInfo.heroDesc) {
+            const desc = pageEl.querySelector('.tool-intro-desc, .tool-hero-content .section-subtitle');
+            if (desc) desc.textContent = routeInfo.heroDesc;
+        }
+    }
+
+    function updateMetaTags(routeInfo, canonicalOverride) {
         document.title = routeInfo.title;
 
         let metaDesc = document.querySelector('meta[name="description"]');
@@ -160,7 +381,7 @@
             metaKw.content = routeInfo.keywords;
         }
 
-        const canonicalUrl = config.getCanonicalUrl(routeInfo.path || routeInfo.canonical || '/');
+        const canonicalUrl = config.getCanonicalUrl(canonicalOverride || routeInfo.canonical || routeInfo.path || '/');
 
         let canonicalLink = document.querySelector('link[rel="canonical"]');
         if (!canonicalLink) {
@@ -186,15 +407,16 @@
     }
 
     function updateNavHighlights(path) {
+        const routeObj = ROUTES[path];
+        const effectiveNav = (routeObj && routeObj.navPath) || path;
         const links = document.querySelectorAll('.site-nav-link');
         links.forEach(link => {
             const href = link.getAttribute('href');
             if (!href) return;
             const linkPath = parseUrl(href).pathname;
-            const isMatch = (linkPath === path) || 
-                            (path === '/' && linkPath === '/') ||
-                            ((path === '/about' || path === '/about-us') && (linkPath === '/about' || linkPath === '/about-us')) ||
-                            ((path === '/contact' || path === '/contact-us') && (linkPath === '/contact' || linkPath === '/contact-us'));
+            const linkRoute = ROUTES[linkPath];
+            const linkNav = (linkRoute && linkRoute.navPath) || linkPath;
+            const isMatch = (linkNav === effectiveNav);
             if (isMatch) {
                 link.classList.add('active');
             } else {
@@ -220,50 +442,62 @@
         }, 80);
     }
 
-    function mountStudioTool(targetPath, requestedTool) {
+    function mountStudioTool(routeInfo) {
         const workspace = document.getElementById('shared-studio-workspace') || document.getElementById('page-studio-workspace');
-        if (!workspace) return;
+        if (!workspace || !routeInfo || !routeInfo.mode) return;
 
         let targetMountId = null;
-        let mode = 'DOC';
+        if (routeInfo.mode === 'DOC') targetMountId = 'tool-stage-doc';
+        else if (routeInfo.mode === 'ID') targetMountId = 'tool-stage-id';
+        else if (routeInfo.mode === 'EDITOR') targetMountId = 'tool-stage-editor';
 
-        if (targetPath === '/document-studio') {
-            targetMountId = 'tool-stage-doc';
-            mode = 'DOC';
-        } else if (targetPath === '/id-card-studio') {
-            targetMountId = 'tool-stage-id';
-            mode = 'ID';
-        } else if (targetPath === '/image-pdf-editor') {
-            targetMountId = 'tool-stage-editor';
-            mode = 'EDITOR';
+        if (!targetMountId) return;
+
+        const mountEl = document.getElementById(targetMountId);
+        if (mountEl && workspace.parentElement !== mountEl) {
+            mountEl.appendChild(workspace);
         }
+        workspace.classList.remove('hidden');
+        workspace.style.display = 'block';
 
-        if (targetMountId) {
-            const mountEl = document.getElementById(targetMountId);
-            if (mountEl && workspace.parentElement !== mountEl) {
-                mountEl.appendChild(workspace);
-            }
-            workspace.classList.remove('hidden');
-            workspace.style.display = 'block';
-
+        window._monuSyncingRoute = true;
+        try {
             if (typeof window.switchMode === 'function') {
-                window.switchMode(mode);
+                window.switchMode(routeInfo.mode);
             }
 
-            if (targetPath === '/document-studio') {
-                const sub = (requestedTool === 'img2pdf' || requestedTool === 'pdfcompress') ? requestedTool : 'scanner';
+            if (routeInfo.mode === 'DOC') {
+                const sub = (routeInfo.subTool === 'img2pdf' || routeInfo.subTool === 'pdfcompress') ? routeInfo.subTool : 'scanner';
                 if (typeof window.switchDocStudioTool === 'function') {
-                    window.switchDocStudioTool(sub);
+                    window.switchDocStudioTool(sub, null, true);
                 }
-            } else if (targetPath === '/image-pdf-editor' && requestedTool && typeof window.switchTool === 'function') {
-                const normalizedTool = requestedTool === 'watermark' ? 'pdfwatermark' : requestedTool;
+            } else if (routeInfo.mode === 'EDITOR' && typeof window.switchTool === 'function') {
                 const validTools = ['compress', 'resize', 'crop', 'convert', 'brightness', 'pdfwatermark'];
-                if (validTools.includes(normalizedTool)) {
-                    window.switchTool(normalizedTool);
-                } else {
-                    window.switchTool('compress');
-                }
+                const targetTool = validTools.includes(routeInfo.editorTool) ? routeInfo.editorTool : 'compress';
+                window.switchTool(targetTool, null, true);
             }
+        } finally {
+            window._monuSyncingRoute = false;
+        }
+    }
+
+    function syncToolRoute(targetUrl) {
+        if (window._monuSyncingRoute) return;
+        const cleanTarget = normalizePath(targetUrl);
+        const route = ROUTES[cleanTarget];
+        if (!route) return;
+
+        const targetPage = document.getElementById(route.pageId);
+        if (targetPage) {
+            updatePageHeroDetails(targetPage, route);
+        }
+        updateMetaTags(route, route.canonical || route.path || cleanTarget);
+        updateNavHighlights(cleanTarget);
+
+        if (currentRoutePath !== cleanTarget || window.location.pathname !== cleanTarget) {
+            currentRoutePath = cleanTarget;
+            window.history.pushState({ path: cleanTarget, search: '', hash: '' }, route.title, cleanTarget);
+            _spaHistoryCount++;
         }
     }
 
@@ -302,21 +536,13 @@
 
     function navigateTo(url, push = true) {
         const { pathname, search, hash } = parseUrl(url);
-        const requestedTool = search ? (new URLSearchParams(search).get('tool') || '') : '';
-
-        // Redirect legacy PDF query params on /image-pdf-editor cleanly into /document-studio
-        if (pathname === '/image-pdf-editor' && (requestedTool === 'img2pdf' || requestedTool === 'pdfcompress')) {
-            return navigateTo('/document-studio?tool=' + requestedTool, push);
-        }
-        // Redirect PDF Watermark requests on /document-studio or legacy ?tool=watermark into /image-pdf-editor
-        if (pathname === '/document-studio' && requestedTool === 'pdfwatermark') {
-            return navigateTo('/image-pdf-editor?tool=pdfwatermark', push);
-        }
-        if (pathname === '/image-pdf-editor' && requestedTool === 'watermark') {
-            return navigateTo('/image-pdf-editor?tool=pdfwatermark', push);
+        const resolution = resolveToolRoute(pathname, search);
+        if (resolution.redirectUrl) {
+            return navigateTo(resolution.redirectUrl + (hash || ''), push);
         }
 
-        const route = ROUTES[pathname] || ROUTES['/'];
+        const route = resolution.route;
+        const resolvedPath = resolution.resolvedPath;
 
         // Hide all page views
         const pages = document.querySelectorAll('.page-view');
@@ -326,17 +552,17 @@
         const targetPage = document.getElementById(route.pageId);
         if (targetPage) {
             targetPage.classList.remove('hidden');
+            updatePageHeroDetails(targetPage, route);
             initVisibleAds(targetPage);
         } else {
-            // Target page view not found in current DOM (e.g. multi-page static navigation)
             window.location.href = url;
             return;
         }
 
-        // Mount tool directly into Section 3 if navigating to one of the 3 tool pages
-        if (pathname === '/document-studio' || pathname === '/id-card-studio' || pathname === '/image-pdf-editor') {
-            mountStudioTool(pathname, requestedTool);
-        } else if (pathname === '/passport-photo-maker') {
+        // Mount shared studio workspace or refresh Passport canvas
+        if (route.mode === 'DOC' || route.mode === 'ID' || route.mode === 'EDITOR') {
+            mountStudioTool(route);
+        } else if (route.mode === 'PASSPORT') {
             if (typeof window.checkPendingPassportTransfer === 'function') {
                 window.checkPendingPassportTransfer();
             }
@@ -346,18 +572,18 @@
         }
 
         // Update URL & Meta
-        currentRoutePath = pathname;
+        currentRoutePath = resolvedPath;
         const cleanTargetHash = (hash === '#explore-our-tools') ? '' : (hash || '');
-        const fullTargetUrl = pathname + search + cleanTargetHash;
+        const fullTargetUrl = resolvedPath + search + cleanTargetHash;
         if (push && (window.location.pathname + window.location.search + window.location.hash) !== fullTargetUrl) {
-            window.history.pushState({ path: pathname, search: search, hash: cleanTargetHash }, route.title, fullTargetUrl);
+            window.history.pushState({ path: resolvedPath, search: search, hash: cleanTargetHash }, route.title, fullTargetUrl);
             _spaHistoryCount++;
-        } else if (!push && (hash === '#explore-tools' || hash === '#explore-our-tools') && pathname === '/') {
+        } else if (!push && (hash === '#explore-tools' || hash === '#explore-our-tools') && resolvedPath === '/') {
             window.history.replaceState({ path: '/', search: '', hash: '' }, route.title, '/');
         }
 
-        updateMetaTags(route);
-        updateNavHighlights(pathname);
+        updateMetaTags(route, resolution.canonicalPath);
+        updateNavHighlights(resolvedPath);
 
         // Close mobile drawer if open
         const mobileDrawer = document.getElementById('mobileNavDrawer');
@@ -371,16 +597,20 @@
         }
 
         // If navigating to privacy policy, refresh storage statistics
-        if (pathname === '/privacy-policy') {
+        if (resolvedPath === '/privacy-policy') {
             setTimeout(refreshPrivacyStorageStats, 100);
         }
     }
 
     function openStudioWorkspace(mode) {
-        const targetUrl = (mode === 'ID') ? '/id-card-studio'
-            : (mode === 'EDITOR' ? '/image-pdf-editor'
-            : (mode === 'PASSPORT' ? '/passport-photo-maker' : '/document-studio'));
-        const needsNav = currentRoutePath !== targetUrl;
+        const activeRoute = ROUTES[currentRoutePath];
+        const alreadyOnSameStudio = !!(activeRoute && activeRoute.mode === mode);
+        const targetUrl = alreadyOnSameStudio
+            ? currentRoutePath
+            : ((mode === 'ID') ? '/id-card-print'
+                : (mode === 'EDITOR' ? '/image-compress'
+                : (mode === 'PASSPORT' ? '/passport-photo-maker' : '/document-enhance')));
+        const needsNav = !alreadyOnSameStudio;
         if (needsNav) {
             navigateTo(targetUrl, true);
         }
@@ -541,10 +771,10 @@
             if (link) {
                 const href = link.getAttribute('href');
                 if (href && (href.startsWith('/') || href.startsWith('#')) && !href.startsWith('//')) {
-                    const { pathname, hash } = parseUrl(href);
+                    const { pathname, search, hash } = parseUrl(href);
 
-                    // If same page with hash anchor, scroll smoothly without full reload
-                    if (pathname === currentRoutePath && hash) {
+                    // If same page with hash anchor (and no conflicting query), scroll smoothly without full reload
+                    if (pathname === currentRoutePath && !search && hash) {
                         e.preventDefault();
                         const resolvedHash = (hash === '#explore-tools') ? '#explore-our-tools' : hash;
                         scrollToHash(resolvedHash);
@@ -600,12 +830,24 @@
             return;
         }
 
+        // Handle GitHub Pages 404 fallback redirect query param if present
+        if (urlParams.has('p')) {
+            const redirectPath = urlParams.get('p') || '/';
+            const cleanTarget = normalizePath(redirectPath);
+            const parsedRedirect = parseUrl(cleanTarget);
+            const targetHistoryUrl = ROUTES[parsedRedirect.pathname]
+                ? (cleanTarget + window.location.hash)
+                : ('/' + window.location.hash);
+            window.history.replaceState({ path: parsedRedirect.pathname }, '', targetHistoryUrl);
+        }
+
         // Initial Route Resolution on Load
         const initialFullUrl = window.location.pathname + window.location.search + window.location.hash;
         const parsed = parseUrl(initialFullUrl);
         if (ROUTES[parsed.pathname]) {
             navigateTo(initialFullUrl, false);
         } else {
+            window.history.replaceState({ path: '/' }, '', '/' + (parsed.hash || ''));
             navigateTo('/' + (parsed.hash || ''), false);
         }
 
@@ -666,6 +908,7 @@
         openStudioWorkspace,
         closeStudioWorkspace,
         mountStudioTool,
+        syncToolRoute,
         updateWorkspaceTopGuide,
         copyContactMessage,
         promptClearAllData,
@@ -673,7 +916,9 @@
         executeClearAllData,
         refreshPrivacyStorageStats,
         canGoBack,
-        goBack
+        goBack,
+        DOC_SUBTOOL_URLS,
+        EDITOR_TOOL_URLS
     };
 
     if (document.readyState === 'loading') {

@@ -40,15 +40,28 @@ window.ImagePDFEditorDB = {
     async saveEditorData(key, data) {
         try {
             const db = await this.init();
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 const tx = db.transaction('editorProjects', 'readwrite');
                 const store = tx.objectStore('editorProjects');
                 store.put({ id: key, timestamp: Date.now(), data });
                 tx.oncomplete = () => resolve(true);
-                tx.onerror = (e) => reject(e.target.error);
+                tx.onerror = (e) => {
+                    const err = e?.target?.error || tx.error;
+                    if (err && err.name === 'QuotaExceededError') {
+                        console.warn('ImagePDFEditorDB storage quota exceeded for key:', key);
+                    } else {
+                        console.warn('ImagePDFEditorDB Save Warning:', err);
+                    }
+                    resolve(false);
+                };
             });
         } catch (err) {
-            console.warn('ImagePDFEditorDB Save Warning:', err);
+            if (err && err.name === 'QuotaExceededError') {
+                console.warn('ImagePDFEditorDB storage quota exceeded for key:', key);
+            } else {
+                console.warn('ImagePDFEditorDB Save Warning:', err);
+            }
+            return false;
         }
     },
     async getEditorData(key) {
@@ -65,8 +78,91 @@ window.ImagePDFEditorDB = {
             console.warn('ImagePDFEditorDB Load Warning:', err);
             return null;
         }
+    },
+    async deleteEditorData(key) {
+        try {
+            const db = await this.init();
+            return new Promise((resolve) => {
+                const tx = db.transaction('editorProjects', 'readwrite');
+                const store = tx.objectStore('editorProjects');
+                store.delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch (err) {
+            console.warn('ImagePDFEditorDB Delete Warning:', err);
+            return false;
+        }
     }
 };
+
+const EDITOR_SESSION_KEYS = {
+    editor: 'editor_active_session',
+    img2pdf: 'editor_img2pdf_session',
+    pdfopt: 'editor_pdfopt_session',
+    pdfwm: 'editor_pdfwm_session'
+};
+
+let _restoringEditorSession = false;
+let _preserveAdjustmentsDuringRestore = false;
+const _editorSaveTimers = {};
+const _pdfOptSourceBlobs = new Map();
+
+async function urlToBlobSafe(url) {
+    if (!url || typeof url !== 'string') return null;
+    try {
+        if (url.startsWith('data:')) {
+            return dataUrlToBlobSync(url);
+        }
+        if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) {
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            return await resp.blob();
+        }
+    } catch (e) {
+        console.warn('urlToBlobSafe warning:', e);
+    }
+    return null;
+}
+
+function scheduleEditorSessionSave(kind, delayMs = 300) {
+    if (_restoringEditorSession) return;
+    if (_editorSaveTimers[kind]) {
+        clearTimeout(_editorSaveTimers[kind]);
+    }
+    _editorSaveTimers[kind] = setTimeout(() => {
+        delete _editorSaveTimers[kind];
+        runEditorSessionSave(kind);
+    }, delayMs);
+}
+
+function runEditorSessionSave(kind) {
+    if (_restoringEditorSession) return Promise.resolve(false);
+    if (kind === 'editor') return saveEditorMainSession();
+    if (kind === 'img2pdf') return saveImg2PdfSession();
+    if (kind === 'pdfopt') return savePdfOptSession();
+    if (kind === 'pdfwm') return savePdfWatermarkSession();
+    return Promise.resolve(false);
+}
+
+function flushAllEditorSessions() {
+    Object.keys(_editorSaveTimers).forEach((k) => {
+        clearTimeout(_editorSaveTimers[k]);
+        delete _editorSaveTimers[k];
+    });
+    if (_restoringEditorSession) return;
+    saveEditorMainSession();
+    saveImg2PdfSession();
+    savePdfOptSession();
+    savePdfWatermarkSession();
+}
+
+window.addEventListener('pagehide', flushAllEditorSessions);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        flushAllEditorSessions();
+    }
+});
 
 window.addEventListener('DOMContentLoaded', () => {
     window.ImagePDFEditorDB.init().catch(err => console.warn('Editor DB init error:', err));
@@ -436,9 +532,9 @@ async function syncEditorToScanner() {
             console.warn('Pending Doc Studio DB persist warning:', err);
         }
         if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-            MonuRouter.navigateTo('/document-studio');
+            MonuRouter.navigateTo('/document-enhance');
         } else {
-            window.location.href = '/document-studio';
+            window.location.href = '/document-enhance';
         }
         return;
     }
@@ -483,7 +579,7 @@ async function syncEditorToScanner() {
         }
 
         if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-            MonuRouter.navigateTo('/document-studio');
+            MonuRouter.navigateTo('/document-enhance');
         } else if (typeof switchMode === 'function') {
             switchMode('DOC');
         }
@@ -567,6 +663,7 @@ async function sendEditorImageTo(destination) {
     }
 
     if (destination === 'img2pdf' || destination === 'pdfcompress') {
+        const destRoute = destination === 'img2pdf' ? '/image-to-pdf' : '/pdf-compress';
         const transferPayload = {
             source: 'Image Editor',
             targetTool: destination,
@@ -576,7 +673,7 @@ async function sendEditorImageTo(destination) {
         const hasDocPage = !!document.getElementById('page-doc-studio');
         if (hasDocPage && typeof window.switchMode === 'function') {
             if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-                MonuRouter.navigateTo('/document-studio?tool=' + destination);
+                MonuRouter.navigateTo(destRoute);
             } else {
                 switchMode('DOC');
                 if (typeof window.switchDocStudioTool === 'function') window.switchDocStudioTool(destination);
@@ -593,9 +690,9 @@ async function sendEditorImageTo(destination) {
             console.warn('Transfer persist warning:', err);
         }
         if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-            MonuRouter.navigateTo('/document-studio?tool=' + destination);
+            MonuRouter.navigateTo(destRoute);
         } else {
-            window.location.href = '/document-studio?tool=' + destination;
+            window.location.href = destRoute;
         }
         return;
     }
@@ -614,9 +711,9 @@ async function receiveCrossStudioTransfer(payload) {
             if (converted && converted.file) files.push(converted.file);
         }
         if (typeof window.switchDocStudioTool === 'function' && document.getElementById('docStudioToolSwitch')) {
-            window.switchDocStudioTool('img2pdf');
+            window.switchDocStudioTool('img2pdf', null, true);
         } else {
-            switchTool('img2pdf', null);
+            switchTool('img2pdf', null, true);
         }
         if (files.length) {
             await addFilesToImg2Pdf(files);
@@ -632,9 +729,9 @@ async function receiveCrossStudioTransfer(payload) {
             if (converted && converted.file) files.push(converted.file);
         }
         if (typeof window.switchDocStudioTool === 'function' && document.getElementById('docStudioToolSwitch')) {
-            window.switchDocStudioTool('pdfcompress');
+            window.switchDocStudioTool('pdfcompress', null, true);
         } else {
-            switchTool('pdfcompress', null);
+            switchTool('pdfcompress', null, true);
         }
         if (files.length) {
             await addFilesToPdfOptimizer(files);
@@ -839,6 +936,7 @@ function applyHistory(idx) {
             resInfo.textContent = `${img.width}×${img.height}px | ~${kb}KB`;
         }
         updateImageInfoBar(img, s.url, FNAME, IMG_FILE);
+        scheduleEditorSessionSave('editor', 250);
     };
     img.src = s.url;
     showEditorStatus(`${HIST_IDX < idx + 1 ? '↩' : '↪'}: ${s.label}`, 'info');
@@ -898,6 +996,7 @@ function resetEditorImage() {
         updateImageInfoBar(img, initial.url, FNAME, IMG_FILE);
         updateURBtns();
         showEditorStatus('↺ Reset image edits back to original source.', 'ok');
+        scheduleEditorSessionSave('editor', 200);
     };
     img.src = initial.url;
 }
@@ -953,6 +1052,9 @@ function deleteEditorImage() {
     
     updateURBtns();
     updateImageInfoBar(null, null, '', null);
+    if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+        window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.editor);
+    }
     showEditorStatus('🗑️ Active image deleted and workspace cleared.', 'info');
 }
 
@@ -982,7 +1084,16 @@ const EDITOR_TOOLS_META = {
 };
 
 // ═══ SWITCH TOOL ═══
-function switchTool(id, btn) {
+const EDITOR_CLEAN_ROUTES = {
+    compress: '/image-compress',
+    resize: '/photo-resize',
+    crop: '/image-crop',
+    convert: '/image-convert',
+    brightness: '/image-adjust',
+    pdfwatermark: '/pdf-watermark'
+};
+
+function switchTool(id, btn, skipRouteSync = false) {
     TOOL = id;
     window.TOOL = id;
     const allTabs = document.querySelectorAll('.editor-tool-tab');
@@ -1083,8 +1194,8 @@ function switchTool(id, btn) {
         }
     }
 
-    // Reset temporary CSS transforms on live preview
-    if (!isStandalone && livePreviewImg) {
+    // Reset temporary CSS transforms on live preview unless restoring saved adjustment filters
+    if (!isStandalone && livePreviewImg && !_restoringEditorSession && !_preserveAdjustmentsDuringRestore) {
         livePreviewImg.style.filter = 'none';
         livePreviewImg.style.transform = '';
     }
@@ -1103,9 +1214,24 @@ function switchTool(id, btn) {
             }
         }
         if (id === 'crop') initCropDisplay();
-        if (id === 'brightness') resetBrightness();
+        if (id === 'brightness') {
+            if (_restoringEditorSession || _preserveAdjustmentsDuringRestore) {
+                liveBrightness();
+            } else {
+                resetBrightness();
+            }
+        }
     } else if (!isStandalone && !IMG) {
         updateImageInfoBar(null, null, '', null);
+    }
+
+    if (!skipRouteSync && !window._monuSyncingRoute && EDITOR_CLEAN_ROUTES[id]) {
+        if (window.MonuRouter && typeof window.MonuRouter.syncToolRoute === 'function') {
+            window.MonuRouter.syncToolRoute(EDITOR_CLEAN_ROUTES[id]);
+        }
+    }
+    if (!skipRouteSync && !_restoringEditorSession && IMG && !isStandalone) {
+        scheduleEditorSessionSave('editor', 250);
     }
 }
 
@@ -1164,7 +1290,8 @@ function loadEditorImg(input) {
                 window.MonuSessionManager.setProcessingLocation('COMPLETED_BROWSER');
             }
 
-            switchTool(TOOL, null);
+            switchTool(TOOL, null, true);
+            scheduleEditorSessionSave('editor', 200);
         };
         img.src = e.target.result;
     };
@@ -1262,6 +1389,7 @@ function setEditorResult(url, label, skipReTrigger = false) {
     pushHistory(url, label);
     updateEditorFilenameUI();
     finishEditorProgress();
+    scheduleEditorSessionSave('editor', 250);
 }
 
 let CUSTOM_EDITOR_FNAME = '';
@@ -1510,6 +1638,7 @@ function setSizeMode(m, btn) {
             ? 'Adjust controls or click Execute File Size Boost'
             : 'Adjust controls or click Compress Image';
     }
+    scheduleEditorSessionSave('editor', 250);
 }
 
 // Resolution & Quality Detector
@@ -1692,6 +1821,7 @@ function getCompressOutputFormat(selectId) {
 }
 
 function liveCompress(delayMs = 120) {
+    scheduleEditorSessionSave('editor', 450);
     const snap = getCompressSourceImage();
     if (!snap) return;
 
@@ -1731,6 +1861,7 @@ function liveCompress(delayMs = 120) {
 }
 
 function liveIncrease(delayMs = 120) {
+    scheduleEditorSessionSave('editor', 450);
     const snap = getCompressSourceImage();
     if (!snap) return;
 
@@ -1916,6 +2047,7 @@ function onResizeUnitChange(newUnit) {
     }
     currentResizeUnit = newUnit;
     liveResize();
+    scheduleEditorSessionSave('editor', 300);
 }
 
 function arUpdate(ch) {
@@ -1958,6 +2090,7 @@ function liveResize() {
             resInfo.textContent = `Resize Target: ${valW || 0}×${valH || 0}${currentResizeUnit} (${pxW}×${pxH}px)`;
         }
     }
+    scheduleEditorSessionSave('editor', 350);
 }
 
 function doResize() {
@@ -2437,6 +2570,7 @@ function onCropAngleChange(val) {
             cropImg.style.transform = `rotate(${cropRotationAngle}deg)${fitScale < 0.99 ? ` scale(${fitScale.toFixed(4)})` : ''}`;
         }
     }
+    scheduleEditorSessionSave('editor', 300);
 }
 
 function setCropAnglePreset(deg) {
@@ -2591,6 +2725,7 @@ function onRgbBalanceInput() {
     if (bVal) bVal.textContent = formatSignedRgbVal(b);
 
     liveBrightness();
+    scheduleEditorSessionSave('editor', 350);
 }
 
 function applyColorBalanceToImageData(imageData, settings) {
@@ -2657,6 +2792,7 @@ function getRgbPreviewCanvas(srcImg) {
 
 function liveBrightness() {
     if (!IMG) return;
+    scheduleEditorSessionSave('editor', 350);
     const br = document.getElementById('brSlider').value;
     const ct = document.getElementById('ctSlider').value;
     const sat = document.getElementById('satSlider').value;
@@ -2783,6 +2919,7 @@ function rotateImg2PdfPage(i, angleDelta) {
     renderImg2PdfList();
     selectImg2PdfActive(i);
     showEditorStatus(`🔄 Image ${i + 1} rotated to ${item.rotation}°`, 'info');
+    scheduleEditorSessionSave('img2pdf', 200);
 }
 window.rotateImg2PdfPage = rotateImg2PdfPage;
 
@@ -2798,6 +2935,7 @@ function rotateAllImg2PdfPages(angle, isReset = false) {
     renderImg2PdfList();
     selectImg2PdfActive(i2pActiveIdx);
     showEditorStatus(isReset ? '↺ Reset rotation for all images to 0°' : `🔄 Rotated all images by ${angle}°`, 'info');
+    scheduleEditorSessionSave('img2pdf', 200);
 }
 window.rotateAllImg2PdfPages = rotateAllImg2PdfPages;
 
@@ -2856,6 +2994,7 @@ async function addFilesToImg2Pdf(files) {
         i2pActiveIdx = img2pdfFiles.length - 1;
         renderImg2PdfList();
         showEditorStatus(`✅ Added ${added} image(s) to sequence.`, 'ok');
+        scheduleEditorSessionSave('img2pdf', 200);
     }
 }
 
@@ -2965,6 +3104,7 @@ function renderImg2PdfList() {
             i2pActiveIdx = i;
             i2pDragSrc = null;
             renderImg2PdfList();
+            scheduleEditorSessionSave('img2pdf', 200);
         });
         list.appendChild(card);
     });
@@ -3013,6 +3153,7 @@ function moveImg2Pdf(idx, dir) {
     img2pdfFiles.splice(targetIdx, 0, item);
     i2pActiveIdx = targetIdx;
     renderImg2PdfList();
+    scheduleEditorSessionSave('img2pdf', 200);
 }
 
 function removeImg2Pdf(i) {
@@ -3021,6 +3162,11 @@ function removeImg2Pdf(i) {
     img2pdfFiles.splice(i, 1);
     if (i2pActiveIdx >= img2pdfFiles.length) i2pActiveIdx = Math.max(0, img2pdfFiles.length - 1);
     renderImg2PdfList();
+    if (img2pdfFiles.length) {
+        scheduleEditorSessionSave('img2pdf', 200);
+    } else if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+        window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.img2pdf);
+    }
 }
 
 function clearImg2Pdf() {
@@ -3034,6 +3180,9 @@ function clearImg2Pdf() {
     const statsEl = document.getElementById('i2pStats');
     if (statsEl) statsEl.style.display = 'none';
     renderImg2PdfList();
+    if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+        window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.img2pdf);
+    }
     showEditorStatus('Cleared image sequence.', 'info');
 }
 
@@ -3166,6 +3315,7 @@ function rotatePdfOptPage(i, angleDelta) {
     renderPdfOptPages();
     selectPdfOptActive(i);
     showEditorStatus(`🔄 Page ${i + 1} rotated to ${item.rotation}°`, 'info');
+    scheduleEditorSessionSave('pdfopt', 200);
 }
 window.rotatePdfOptPage = rotatePdfOptPage;
 
@@ -3181,6 +3331,7 @@ function rotateAllPdfOptPages(angle, isReset = false) {
     renderPdfOptPages();
     selectPdfOptActive(pdfOptActiveIdx);
     showEditorStatus(isReset ? '↺ Reset rotation for all pages to 0°' : `🔄 Rotated all pages by ${angle}°`, 'info');
+    scheduleEditorSessionSave('pdfopt', 200);
 }
 window.rotateAllPdfOptPages = rotateAllPdfOptPages;
 
@@ -3206,6 +3357,7 @@ function setPdfMode(mode, btn) {
     document.getElementById('pdfCompressSettings').style.display = mode === 'compress' ? '' : 'none';
     document.getElementById('pdfIncreaseSettings').style.display = mode === 'increase' ? '' : 'none';
     updatePdfEstimate();
+    scheduleEditorSessionSave('pdfopt', 250);
 }
 
 async function loadPDF(input) {
@@ -3275,9 +3427,15 @@ async function addFilesToPdfOptimizer(files) {
             for (const file of files) {
                 try {
                     if (file.type === 'application/pdf' || file.name.match(/\.pdf$/i)) {
-                        const arrayBuf = await file.arrayBuffer();
-                        const pdfDoc = await loadPdfDocumentSafe(arrayBuf, file.name, (msg, type) => showEditorStatus(msg, type));
+                        const rawBuf = await file.arrayBuffer();
+                        const rawBytesCopy = new Uint8Array(rawBuf).slice(0);
+                        const sourceKey = 'pdfsrc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+                        const pdfDoc = await loadPdfDocumentSafe(rawBytesCopy.slice(0).buffer, file.name, (msg, type) => showEditorStatus(msg, type));
                         if (!pdfDoc) continue;
+                        _pdfOptSourceBlobs.set(sourceKey, {
+                            name: file.name,
+                            blob: new Blob([rawBytesCopy], { type: 'application/pdf' })
+                        });
                         const numPages = pdfDoc.numPages;
                         const bytesPerPage = Math.round(file.size / numPages);
 
@@ -3297,6 +3455,7 @@ async function addFilesToPdfOptimizer(files) {
                             pdfOptPages.push({
                                 id: 'pdf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                                 type: 'pdf',
+                                sourceKey: sourceKey,
                                 sourceName: file.name,
                                 origBytes: bytesPerPage,
                                 width: Math.round(vp1.width),
@@ -3353,6 +3512,7 @@ async function addFilesToPdfOptimizer(files) {
                 pdfOptActiveIdx = pdfOptPages.length - 1;
                 renderPdfOptPages();
                 updatePdfEstimate();
+                if (addedCount > 0) scheduleEditorSessionSave('pdfopt', 250);
             }
             if (errors.length > 0) {
                 showEditorStatus(`⚠️ ${errors.join(' | ')}`, 'err');
@@ -3478,6 +3638,7 @@ function renderPdfOptPages() {
             pdfOptDragSrc = null;
             renderPdfOptPages();
             updatePdfEstimate();
+            scheduleEditorSessionSave('pdfopt', 200);
         });
 
         list.appendChild(card);
@@ -3550,6 +3711,7 @@ function movePdfOptPage(idx, dir) {
     pdfOptActiveIdx = targetIdx;
     renderPdfOptPages();
     updatePdfEstimate();
+    scheduleEditorSessionSave('pdfopt', 200);
 }
 
 function removePdfOptPage(i) {
@@ -3557,12 +3719,21 @@ function removePdfOptPage(i) {
     if (pdfOptActiveIdx >= pdfOptPages.length) pdfOptActiveIdx = Math.max(0, pdfOptPages.length - 1);
     renderPdfOptPages();
     updatePdfEstimate();
+    if (pdfOptPages.length) {
+        scheduleEditorSessionSave('pdfopt', 200);
+    } else {
+        _pdfOptSourceBlobs.clear();
+        if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+            window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.pdfopt);
+        }
+    }
 }
 
 function clearPdfOptPages() {
     pdfOptPages = [];
     pdfOptActiveIdx = 0;
     PDF_RESULT = null;
+    _pdfOptSourceBlobs.clear();
     const fileInput = document.getElementById('pdfFileInput');
     if (fileInput) fileInput.value = '';
     const activeImg = document.getElementById('pdfOptActiveImg');
@@ -3574,6 +3745,9 @@ function clearPdfOptPages() {
     const estBar = document.getElementById('pdfEstimateBar');
     if (estBar) estBar.style.display = 'none';
     renderPdfOptPages();
+    if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+        window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.pdfopt);
+    }
     showEditorStatus('Cleared PDF sequence.', 'info');
 }
 const clearPDFOptPages = clearPdfOptPages;
@@ -4118,6 +4292,7 @@ function loadPdfWatermarkFile(inputOrFile) {
 
             renderPdfWatermarkStageState();
             showEditorStatus(`✅ PDF loaded (${pdfDoc.numPages} page${pdfDoc.numPages !== 1 ? 's' : ''}). Customize watermark settings on the right.`, 'ok');
+            scheduleEditorSessionSave('pdfwm', 200);
         } catch (err) {
             console.error('PDF Watermark load error:', err);
             if (loadingBox) loadingBox.style.display = 'none';
@@ -4141,6 +4316,7 @@ function changePdfWatermarkPage(delta) {
     if (next === pdfWmState.currentPage) return;
     pdfWmState.currentPage = next;
     renderPdfWatermarkStageState();
+    scheduleEditorSessionSave('pdfwm', 250);
 }
 window.changePdfWatermarkPage = changePdfWatermarkPage;
 
@@ -4188,6 +4364,7 @@ function loadPdfWatermarkLogo(input) {
 
                 updatePdfWatermarkPreview();
                 showEditorStatus('✅ Watermark logo loaded & preview updated.', 'ok');
+                scheduleEditorSessionSave('pdfwm', 200);
             } catch (err) {
                 console.error('Logo processing error:', err);
                 showEditorStatus('❌ Could not load logo image.', 'err');
@@ -4636,9 +4813,13 @@ function resetPdfWatermarkTool(clearPdfToo = false) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
         renderPdfWatermarkStageState();
+        if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+            window.ImagePDFEditorDB.deleteEditorData(EDITOR_SESSION_KEYS.pdfwm);
+        }
         showEditorStatus('↺ PDF Watermark reset.', 'info');
     } else {
         if (pdfWmState.pdfDoc) updatePdfWatermarkPreview();
+        scheduleEditorSessionSave('pdfwm', 200);
         showEditorStatus('↺ PDF Watermark settings reset to defaults.', 'info');
     }
 }
@@ -4689,7 +4870,8 @@ window.addEventListener('DOMContentLoaded', () => {
                             showEditorStatus('✅ Image loaded!', 'ok');
                             updateImageInfoBar(img, src, FNAME, f);
                             if (TOOL === 'crop') initCropDisplay();
-                            switchTool(TOOL, null);
+                            switchTool(TOOL, null, true);
+                            scheduleEditorSessionSave('editor', 200);
                         };
                         img.src = ev.target.result;
                     };
@@ -4757,9 +4939,688 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Hydrate any cross-studio transfer queued across multi-page navigation
-    checkPendingCrossStudioTransfer();
+    // Persist form control updates across all editor / PDF modules
+    [
+        'qualSlider', 'targetKB', 'compDpi', 'targetIncKB', 'incQualSlider',
+        'resizeUnitSelect', 'rW', 'rH', 'keepAR',
+        'cropUnitSelect', 'cropW', 'cropH',
+        'convFmt', 'convQual', 'convTargetKB',
+        'brSlider', 'ctSlider', 'satSlider', 'hueSlider', 'rgbRSlider', 'rgbGSlider', 'rgbBSlider', 'rgbPreserveLum'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => scheduleEditorSessionSave('editor', 350));
+            el.addEventListener('change', () => scheduleEditorSessionSave('editor', 200));
+        }
+    });
+
+    ['i2pPageSize', 'i2pOrientation', 'i2pMargin', 'i2pQuality', 'i2pPageNum', 'i2pTargetVal', 'i2pTargetUnit', 'i2pDocProtection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => scheduleEditorSessionSave('img2pdf', 350));
+            el.addEventListener('change', () => scheduleEditorSessionSave('img2pdf', 200));
+        }
+    });
+
+    ['pdfQualPreset', 'pdfJpegQual', 'pdfTargetVal', 'pdfTargetUnit', 'pdfDocProtection', 'pdfIncDpi', 'pdfIncJpegQual', 'pdfIncTargetVal', 'pdfIncTargetUnit'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => scheduleEditorSessionSave('pdfopt', 350));
+            el.addEventListener('change', () => scheduleEditorSessionSave('pdfopt', 200));
+        }
+    });
+
+    ['pdfWmText', 'pdfWmGridDensity', 'pdfWmFontSize', 'pdfWmImageScale', 'pdfWmAutoAdjust', 'pdfWmAngle', 'pdfWmOpacity', 'pdfWmColor', 'pdfWmPageScope', 'pdfWmCustomRange'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => scheduleEditorSessionSave('pdfwm', 350));
+            el.addEventListener('change', () => scheduleEditorSessionSave('pdfwm', 200));
+        }
+    });
+
+    // Hydrate any cross-studio transfer first, then restore remaining saved sessions from IndexedDB
+    (async () => {
+        await checkPendingCrossStudioTransfer();
+        await restoreAllEditorSessions();
+    })();
 });
+
+// ═══ INDEXEDDB PERSISTENT SESSION ENGINE (IMAGE EDITOR, IMG2PDF, PDF OPTIMIZER, PDF WATERMARK) ═══
+async function saveEditorMainSession() {
+    if (!window.ImagePDFEditorDB || _restoringEditorSession) return false;
+    if (!IMG && (!HISTORY || HISTORY.length === 0)) {
+        return false;
+    }
+    try {
+        const imgBlob = IMG_FILE instanceof Blob
+            ? IMG_FILE
+            : (IMG && IMG.src ? await urlToBlobSafe(IMG.src) : null);
+        if (!imgBlob) return false;
+
+        const resultBlob = (RESULT && (!IMG || RESULT !== IMG.src)) ? await urlToBlobSafe(RESULT) : null;
+        const savedHistory = [];
+        for (const h of HISTORY.slice(-10)) {
+            if (!h || !h.url) continue;
+            const b = await urlToBlobSafe(h.url);
+            if (b) savedHistory.push({ blob: b, label: h.label || 'Edit' });
+        }
+
+        const payload = {
+            fname: FNAME || 'image',
+            customFname: CUSTOM_EDITOR_FNAME || '',
+            fileName: IMG_FILE ? IMG_FILE.name : (FNAME || 'image') + '.png',
+            fileType: imgBlob.type || 'image/png',
+            fileSize: imgBlob.size || 0,
+            imgBlob,
+            resultBlob,
+            history: savedHistory,
+            histIdx: Math.min(HIST_IDX, savedHistory.length - 1),
+            tool: TOOL,
+            sizeMode: typeof sizeMode !== 'undefined' ? sizeMode : 'compress',
+            currentResizeUnit: typeof currentResizeUnit !== 'undefined' ? currentResizeUnit : 'px',
+            cropUnit: typeof cropUnit !== 'undefined' ? cropUnit : 'px',
+            cropRotationAngle: typeof cropRotationAngle !== 'undefined' ? cropRotationAngle : 0,
+            activeColorTone: typeof activeColorTone !== 'undefined' ? activeColorTone : 'midtones',
+            rgbBalance: typeof rgbBalance !== 'undefined' ? JSON.parse(JSON.stringify(rgbBalance)) : null,
+            controls: {
+                qualSlider: document.getElementById('qualSlider')?.value ?? '80',
+                targetKB: document.getElementById('targetKB')?.value ?? '',
+                compDpi: document.getElementById('compDpi')?.value ?? '300',
+                targetIncKB: document.getElementById('targetIncKB')?.value ?? '',
+                incQualSlider: document.getElementById('incQualSlider')?.value ?? '95',
+                resizeUnitSelect: document.getElementById('resizeUnitSelect')?.value ?? 'px',
+                rW: document.getElementById('rW')?.value ?? '',
+                rH: document.getElementById('rH')?.value ?? '',
+                keepAR: !!document.getElementById('keepAR')?.checked,
+                cropUnitSelect: document.getElementById('cropUnitSelect')?.value ?? 'px',
+                cropW: document.getElementById('cropW')?.value ?? '',
+                cropH: document.getElementById('cropH')?.value ?? '',
+                convFmt: document.getElementById('convFmt')?.value ?? 'image/jpeg',
+                convQual: document.getElementById('convQual')?.value ?? '92',
+                convTargetKB: document.getElementById('convTargetKB')?.value ?? '',
+                brSlider: document.getElementById('brSlider')?.value ?? '100',
+                ctSlider: document.getElementById('ctSlider')?.value ?? '100',
+                satSlider: document.getElementById('satSlider')?.value ?? '100',
+                hueSlider: document.getElementById('hueSlider')?.value ?? '0'
+            },
+            timestamp: Date.now()
+        };
+        return await window.ImagePDFEditorDB.saveEditorData(EDITOR_SESSION_KEYS.editor, payload);
+    } catch (e) {
+        console.warn('saveEditorMainSession warning:', e);
+        return false;
+    }
+}
+
+async function restoreEditorMainSession() {
+    if (!window.ImagePDFEditorDB || IMG) return false;
+    try {
+        const saved = await window.ImagePDFEditorDB.getEditorData(EDITOR_SESSION_KEYS.editor);
+        if (!saved || !saved.imgBlob) return false;
+
+        _restoringEditorSession = true;
+        _preserveAdjustmentsDuringRestore = true;
+
+        const imgDataUrl = await blobToDataUrlAsync(saved.imgBlob);
+        const restoredHistory = [];
+        if (Array.isArray(saved.history)) {
+            for (const entry of saved.history) {
+                if (entry && entry.blob) {
+                    const u = await blobToDataUrlAsync(entry.blob);
+                    restoredHistory.push({ url: u, label: entry.label || 'Edit' });
+                }
+            }
+        }
+        const resultDataUrl = saved.resultBlob ? await blobToDataUrlAsync(saved.resultBlob) : null;
+
+        await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                IMG = img;
+                FNAME = saved.fname || 'image';
+                CUSTOM_EDITOR_FNAME = saved.customFname || '';
+                try {
+                    IMG_FILE = new File([saved.imgBlob], saved.fileName || `${FNAME}.png`, { type: saved.fileType || saved.imgBlob.type || 'image/png' });
+                } catch (_) {
+                    IMG_FILE = null;
+                }
+                RESULT = resultDataUrl;
+                HISTORY = restoredHistory.length ? restoredHistory : [{ url: imgDataUrl, label: 'Original' }];
+                HIST_IDX = (typeof saved.histIdx === 'number' && saved.histIdx >= 0 && saved.histIdx < HISTORY.length)
+                    ? saved.histIdx
+                    : (HISTORY.length - 1);
+
+                const c = saved.controls || {};
+                const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+                setVal('qualSlider', c.qualSlider);
+                const qv = document.getElementById('qualVal');
+                if (qv && c.qualSlider !== undefined) qv.textContent = c.qualSlider + '%';
+                setVal('targetKB', c.targetKB);
+                setVal('compDpi', c.compDpi);
+                const dpiVal = document.getElementById('compDpiVal');
+                if (dpiVal && c.compDpi !== undefined) dpiVal.textContent = (c.compDpi || 300) + ' DPI';
+                setVal('targetIncKB', c.targetIncKB);
+                setVal('incQualSlider', c.incQualSlider);
+                const iqv = document.getElementById('incQualVal');
+                if (iqv && c.incQualSlider !== undefined) iqv.textContent = c.incQualSlider + '%';
+
+                setVal('resizeUnitSelect', c.resizeUnitSelect);
+                if (c.resizeUnitSelect) currentResizeUnit = c.resizeUnitSelect;
+                setVal('rW', c.rW);
+                setVal('rH', c.rH);
+                const keepAREl = document.getElementById('keepAR');
+                if (keepAREl && c.keepAR !== undefined) keepAREl.checked = !!c.keepAR;
+
+                setVal('cropUnitSelect', c.cropUnitSelect);
+                if (saved.cropUnit) cropUnit = saved.cropUnit;
+                setVal('cropW', c.cropW);
+                setVal('cropH', c.cropH);
+                if (typeof saved.cropRotationAngle === 'number') {
+                    onCropAngleChange(saved.cropRotationAngle);
+                }
+
+                setVal('convFmt', c.convFmt);
+                setVal('convQual', c.convQual);
+                const cqv = document.getElementById('convQVal');
+                if (cqv && c.convQual !== undefined) cqv.textContent = c.convQual + '%';
+                setVal('convTargetKB', c.convTargetKB);
+
+                setVal('brSlider', c.brSlider);
+                const brv = document.getElementById('brv'); if (brv && c.brSlider !== undefined) brv.textContent = c.brSlider;
+                setVal('ctSlider', c.ctSlider);
+                const ctv = document.getElementById('ctv'); if (ctv && c.ctSlider !== undefined) ctv.textContent = c.ctSlider;
+                setVal('satSlider', c.satSlider);
+                const satv = document.getElementById('satv'); if (satv && c.satSlider !== undefined) satv.textContent = c.satSlider;
+                setVal('hueSlider', c.hueSlider);
+                const huev = document.getElementById('huev'); if (huev && c.hueSlider !== undefined) huev.textContent = c.hueSlider;
+
+                if (saved.rgbBalance) {
+                    rgbBalance = saved.rgbBalance;
+                    const lumChk = document.getElementById('rgbPreserveLum');
+                    if (lumChk) lumChk.checked = !!rgbBalance.preserveLuminosity;
+                    setColorBalanceTone(saved.activeColorTone || 'midtones');
+                }
+
+                if (saved.sizeMode === 'increase' || saved.sizeMode === 'compress') {
+                    sizeMode = saved.sizeMode;
+                    const modeTab = document.querySelector(`#c-compress .sm-tab:${sizeMode === 'increase' ? 'last-child' : 'first-child'}`);
+                    document.querySelectorAll('#c-compress .sm-tab').forEach(b => b.classList.remove('active'));
+                    if (modeTab) modeTab.classList.add('active');
+                    const cm = document.getElementById('compressMode');
+                    const im = document.getElementById('increaseMode');
+                    if (cm) cm.style.display = sizeMode === 'compress' ? '' : 'none';
+                    if (im) im.style.display = sizeMode === 'increase' ? '' : 'none';
+                }
+
+                const fnInp = document.getElementById('editorDownloadFilename');
+                if (fnInp && CUSTOM_EDITOR_FNAME) fnInp.value = CUSTOM_EDITOR_FNAME;
+
+                const origImg = document.getElementById('origImg');
+                const livePreviewImg = document.getElementById('livePreviewImg');
+                const uploadZone = document.getElementById('editorUploadZone');
+                const singlePreview = document.getElementById('editorSinglePreview');
+                const changeImgBtn = document.getElementById('changeImgBtn');
+                const resetImgBtn = document.getElementById('resetImgBtn');
+                const deleteImgBtn = document.getElementById('deleteImgBtn');
+                const rW = document.getElementById('rW');
+                const rH = document.getElementById('rH');
+
+                if (origImg) origImg.src = imgDataUrl;
+                if (livePreviewImg) livePreviewImg.src = resultDataUrl || imgDataUrl;
+                if (rW) rW.placeholder = img.width;
+                if (rH) rH.placeholder = img.height;
+
+                const isStandalone = ['img2pdf', 'pdfcompress', 'pdfwatermark'].includes(TOOL);
+                if (!isStandalone) {
+                    if (uploadZone) uploadZone.style.display = 'none';
+                    if (singlePreview) singlePreview.style.display = TOOL === 'crop' ? 'none' : 'flex';
+                    const cropCanvasPane = document.getElementById('editorCropCanvasPane');
+                    if (cropCanvasPane) cropCanvasPane.style.display = TOOL === 'crop' ? 'flex' : 'none';
+                    if (changeImgBtn) changeImgBtn.style.display = '';
+                    if (resetImgBtn) resetImgBtn.style.display = '';
+                    if (deleteImgBtn) deleteImgBtn.style.display = '';
+                }
+
+                updateURBtns();
+                updateEditorFilenameUI(false);
+                updateImageInfoBar(img, resultDataUrl || imgDataUrl, FNAME, IMG_FILE);
+                if (TOOL === 'crop') initCropDisplay();
+                else if (TOOL === 'brightness') liveBrightness();
+                else if (TOOL === 'resize') liveResize();
+                resolve();
+            };
+            img.onerror = resolve;
+            img.src = imgDataUrl;
+        });
+
+        setTimeout(() => { _preserveAdjustmentsDuringRestore = false; }, 100);
+        return true;
+    } catch (e) {
+        _preserveAdjustmentsDuringRestore = false;
+        console.warn('restoreEditorMainSession warning:', e);
+        return false;
+    } finally {
+        _restoringEditorSession = false;
+    }
+}
+
+async function saveImg2PdfSession() {
+    if (!window.ImagePDFEditorDB || _restoringEditorSession) return false;
+    if (!img2pdfFiles.length) return false;
+    try {
+        const items = [];
+        for (const item of img2pdfFiles) {
+            if (!item || !item.file) continue;
+            items.push({
+                id: item.id,
+                name: item.name,
+                width: item.width,
+                height: item.height,
+                rotation: item.rotation || 0,
+                thumbUrl: item.thumbUrl,
+                blob: item.file
+            });
+        }
+        if (!items.length) return false;
+        return await window.ImagePDFEditorDB.saveEditorData(EDITOR_SESSION_KEYS.img2pdf, {
+            items,
+            activeIdx: i2pActiveIdx,
+            controls: {
+                pageSize: document.getElementById('i2pPageSize')?.value ?? 'a4',
+                orientation: document.getElementById('i2pOrientation')?.value ?? 'auto',
+                margin: document.getElementById('i2pMargin')?.value ?? '0',
+                quality: document.getElementById('i2pQuality')?.value ?? '0.92',
+                pageNum: document.getElementById('i2pPageNum')?.value ?? 'no',
+                targetVal: document.getElementById('i2pTargetVal')?.value ?? '',
+                targetUnit: document.getElementById('i2pTargetUnit')?.value ?? 'KB',
+                docProtection: document.getElementById('i2pDocProtection')?.checked !== false
+            },
+            timestamp: Date.now()
+        });
+    } catch (e) {
+        console.warn('saveImg2PdfSession warning:', e);
+        return false;
+    }
+}
+
+async function restoreImg2PdfSession() {
+    if (!window.ImagePDFEditorDB || img2pdfFiles.length > 0) return false;
+    try {
+        const saved = await window.ImagePDFEditorDB.getEditorData(EDITOR_SESSION_KEYS.img2pdf);
+        if (!saved || !Array.isArray(saved.items) || !saved.items.length) return false;
+        _restoringEditorSession = true;
+
+        const restored = [];
+        for (const item of saved.items) {
+            if (!item || !item.blob) continue;
+            let f;
+            try {
+                f = new File([item.blob], item.name || 'image.png', { type: item.blob.type || 'image/png' });
+            } catch (_) {
+                f = item.blob;
+            }
+            restored.push({
+                id: item.id || ('i2p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
+                file: f,
+                thumbUrl: item.thumbUrl,
+                previewUrl: null,
+                width: item.width || 0,
+                height: item.height || 0,
+                name: item.name || 'image.png',
+                rotation: item.rotation || 0
+            });
+        }
+        if (!restored.length) return false;
+
+        img2pdfFiles = restored;
+        i2pActiveIdx = Math.max(0, Math.min(saved.activeIdx || 0, img2pdfFiles.length - 1));
+        const c = saved.controls || {};
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+        setVal('i2pPageSize', c.pageSize);
+        setVal('i2pOrientation', c.orientation);
+        setVal('i2pMargin', c.margin);
+        setVal('i2pQuality', c.quality);
+        setVal('i2pPageNum', c.pageNum);
+        setVal('i2pTargetVal', c.targetVal);
+        setVal('i2pTargetUnit', c.targetUnit);
+        const dp = document.getElementById('i2pDocProtection');
+        if (dp && c.docProtection !== undefined) dp.checked = !!c.docProtection;
+
+        renderImg2PdfList();
+        return true;
+    } catch (e) {
+        console.warn('restoreImg2PdfSession warning:', e);
+        return false;
+    } finally {
+        _restoringEditorSession = false;
+    }
+}
+
+async function savePdfOptSession() {
+    if (!window.ImagePDFEditorDB || _restoringEditorSession) return false;
+    if (!pdfOptPages.length) return false;
+    try {
+        const sourceFiles = {};
+        const pages = [];
+        for (const p of pdfOptPages) {
+            if (p.type === 'pdf') {
+                if (p.sourceKey && _pdfOptSourceBlobs.has(p.sourceKey) && !sourceFiles[p.sourceKey]) {
+                    sourceFiles[p.sourceKey] = _pdfOptSourceBlobs.get(p.sourceKey);
+                }
+                pages.push({
+                    id: p.id,
+                    type: 'pdf',
+                    sourceKey: p.sourceKey,
+                    sourceName: p.sourceName,
+                    origBytes: p.origBytes,
+                    width: p.width,
+                    height: p.height,
+                    thumbUrl: p.thumbUrl,
+                    pdfPageNum: p.pdfPageNum,
+                    totalPagesInDoc: p.totalPagesInDoc,
+                    rotation: p.rotation || 0
+                });
+            } else {
+                const imgBlob = p.imgElement && p.imgElement.src ? await urlToBlobSafe(p.imgElement.src) : null;
+                pages.push({
+                    id: p.id,
+                    type: 'image',
+                    sourceName: p.sourceName,
+                    origBytes: p.origBytes,
+                    width: p.width,
+                    height: p.height,
+                    thumbUrl: p.thumbUrl,
+                    imgBlob,
+                    rotation: p.rotation || 0
+                });
+            }
+        }
+        return await window.ImagePDFEditorDB.saveEditorData(EDITOR_SESSION_KEYS.pdfopt, {
+            sourceFiles,
+            pages,
+            activeIdx: pdfOptActiveIdx,
+            pdfMode: PDF_MODE,
+            controls: {
+                qualPreset: document.getElementById('pdfQualPreset')?.value ?? 'ebook',
+                jpegQual: document.getElementById('pdfJpegQual')?.value ?? '0.75',
+                targetVal: document.getElementById('pdfTargetVal')?.value ?? '',
+                targetUnit: document.getElementById('pdfTargetUnit')?.value ?? 'KB',
+                docProtection: document.getElementById('pdfDocProtection')?.checked !== false,
+                incDpi: document.getElementById('pdfIncDpi')?.value ?? '300',
+                incJpegQual: document.getElementById('pdfIncJpegQual')?.value ?? '1.0',
+                incTargetVal: document.getElementById('pdfIncTargetVal')?.value ?? '',
+                incTargetUnit: document.getElementById('pdfIncTargetUnit')?.value ?? 'KB'
+            },
+            timestamp: Date.now()
+        });
+    } catch (e) {
+        console.warn('savePdfOptSession warning:', e);
+        return false;
+    }
+}
+
+async function restorePdfOptSession() {
+    if (!window.ImagePDFEditorDB || pdfOptPages.length > 0) return false;
+    try {
+        const saved = await window.ImagePDFEditorDB.getEditorData(EDITOR_SESSION_KEYS.pdfopt);
+        if (!saved || !Array.isArray(saved.pages) || !saved.pages.length) return false;
+
+        await new Promise((resolve) => {
+            ensurePdfLibs(async () => {
+                _restoringEditorSession = true;
+                try {
+                    const loadedDocs = new Map();
+                    if (saved.sourceFiles) {
+                        for (const [key, entry] of Object.entries(saved.sourceFiles)) {
+                            if (entry && entry.blob) {
+                                _pdfOptSourceBlobs.set(key, entry);
+                                try {
+                                    const buf = await entry.blob.arrayBuffer();
+                                    const doc = await loadPdfDocumentSafe(buf, entry.name || 'document.pdf');
+                                    loadedDocs.set(key, doc);
+                                } catch (pdfErr) {
+                                    console.warn('restorePdfOptSession PDF load error:', pdfErr);
+                                }
+                            }
+                        }
+                    }
+
+                    const restored = [];
+                    for (const p of saved.pages) {
+                        if (p.type === 'pdf') {
+                            const pdfDoc = loadedDocs.get(p.sourceKey);
+                            if (!pdfDoc) continue;
+                            restored.push({
+                                id: p.id,
+                                type: 'pdf',
+                                sourceKey: p.sourceKey,
+                                sourceName: p.sourceName,
+                                origBytes: p.origBytes,
+                                width: p.width,
+                                height: p.height,
+                                thumbUrl: p.thumbUrl,
+                                pdfDoc,
+                                pdfPageNum: p.pdfPageNum,
+                                totalPagesInDoc: p.totalPagesInDoc,
+                                rotation: p.rotation || 0
+                            });
+                        } else if (p.imgBlob) {
+                            const u = await blobToDataUrlAsync(p.imgBlob);
+                            const img = await new Promise((res) => {
+                                const im = new Image();
+                                im.onload = () => res(im);
+                                im.onerror = () => res(null);
+                                im.src = u;
+                            });
+                            if (!img) continue;
+                            restored.push({
+                                id: p.id,
+                                type: 'image',
+                                sourceName: p.sourceName,
+                                origBytes: p.origBytes,
+                                width: p.width,
+                                height: p.height,
+                                thumbUrl: p.thumbUrl || u,
+                                imgElement: img,
+                                rotation: p.rotation || 0
+                            });
+                        }
+                    }
+
+                    if (restored.length) {
+                        pdfOptPages = restored;
+                        pdfOptActiveIdx = Math.max(0, Math.min(saved.activeIdx || 0, pdfOptPages.length - 1));
+                        const c = saved.controls || {};
+                        const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+                        setVal('pdfQualPreset', c.qualPreset);
+                        setVal('pdfJpegQual', c.jpegQual);
+                        setVal('pdfTargetVal', c.targetVal);
+                        setVal('pdfTargetUnit', c.targetUnit);
+                        const dp = document.getElementById('pdfDocProtection');
+                        if (dp && c.docProtection !== undefined) dp.checked = !!c.docProtection;
+                        setVal('pdfIncDpi', c.incDpi);
+                        setVal('pdfIncJpegQual', c.incJpegQual);
+                        setVal('pdfIncTargetVal', c.incTargetVal);
+                        setVal('pdfIncTargetUnit', c.incTargetUnit);
+
+                        if (saved.pdfMode === 'increase' || saved.pdfMode === 'compress') {
+                            PDF_MODE = saved.pdfMode;
+                            const tabBtn = document.querySelector(`#pdfModeTabs .sm-tab:${PDF_MODE === 'increase' ? 'last-child' : 'first-child'}`);
+                            document.querySelectorAll('#pdfModeTabs .sm-tab').forEach(b => b.classList.remove('active'));
+                            if (tabBtn) tabBtn.classList.add('active');
+                            const cs = document.getElementById('pdfCompressSettings');
+                            const is = document.getElementById('pdfIncreaseSettings');
+                            if (cs) cs.style.display = PDF_MODE === 'compress' ? '' : 'none';
+                            if (is) is.style.display = PDF_MODE === 'increase' ? '' : 'none';
+                        }
+
+                        renderPdfOptPages();
+                        updatePdfEstimate();
+                    }
+                } finally {
+                    _restoringEditorSession = false;
+                    resolve();
+                }
+            });
+        });
+        return true;
+    } catch (e) {
+        _restoringEditorSession = false;
+        console.warn('restorePdfOptSession warning:', e);
+        return false;
+    }
+}
+
+async function savePdfWatermarkSession() {
+    if (!window.ImagePDFEditorDB || _restoringEditorSession) return false;
+    if (!pdfWmState.rawPdfBytes && !pdfWmState.imgFileBytes) return false;
+    try {
+        const pdfBlob = pdfWmState.rawPdfBytes
+            ? new Blob([pdfWmState.rawPdfBytes], { type: 'application/pdf' })
+            : null;
+        const logoBlob = pdfWmState.imgFileBytes
+            ? new Blob([pdfWmState.imgFileBytes], { type: pdfWmState.imgFileType || 'image/png' })
+            : null;
+
+        return await window.ImagePDFEditorDB.saveEditorData(EDITOR_SESSION_KEYS.pdfwm, {
+            pdfBlob,
+            pdfName: pdfWmState.file ? pdfWmState.file.name : 'Document.pdf',
+            currentPage: pdfWmState.currentPage || 1,
+            activeTab: pdfWmState.activeTab || 'text',
+            layout: pdfWmState.layout || 'single',
+            anchor: pdfWmState.anchor || 'center',
+            gridDensity: parseInt(document.getElementById('pdfWmGridDensity')?.value, 10) || pdfWmState.gridDensity || 3,
+            logoBlob,
+            logoType: pdfWmState.imgFileType || null,
+            logoName: pdfWmState.imgName || '',
+            controls: {
+                text: document.getElementById('pdfWmText')?.value ?? 'SMARTVLETOOL',
+                fontSize: document.getElementById('pdfWmFontSize')?.value ?? '40',
+                imageScale: document.getElementById('pdfWmImageScale')?.value ?? '30',
+                autoAdjust: document.getElementById('pdfWmAutoAdjust')?.checked !== false,
+                angle: document.getElementById('pdfWmAngle')?.value ?? '45',
+                opacity: document.getElementById('pdfWmOpacity')?.value ?? '40',
+                color: document.getElementById('pdfWmColor')?.value ?? '#475569',
+                pageScope: document.getElementById('pdfWmPageScope')?.value ?? 'all',
+                customRange: document.getElementById('pdfWmCustomRange')?.value ?? ''
+            },
+            timestamp: Date.now()
+        });
+    } catch (e) {
+        console.warn('savePdfWatermarkSession warning:', e);
+        return false;
+    }
+}
+
+async function restorePdfWatermarkSession() {
+    if (!window.ImagePDFEditorDB || pdfWmState.rawPdfBytes) return false;
+    try {
+        const saved = await window.ImagePDFEditorDB.getEditorData(EDITOR_SESSION_KEYS.pdfwm);
+        if (!saved || (!saved.pdfBlob && !saved.logoBlob)) return false;
+
+        await new Promise((resolve) => {
+            ensurePdfWatermarkLibs(async (libErr) => {
+                if (libErr) { resolve(); return; }
+                _restoringEditorSession = true;
+                try {
+                    const c = saved.controls || {};
+                    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+                    setVal('pdfWmText', c.text);
+                    setVal('pdfWmFontSize', c.fontSize);
+                    const fsv = document.getElementById('pdfWmFontSizeVal'); if (fsv && c.fontSize !== undefined) fsv.textContent = c.fontSize + ' pt';
+                    setVal('pdfWmImageScale', c.imageScale);
+                    const isv = document.getElementById('pdfWmImageScaleVal'); if (isv && c.imageScale !== undefined) isv.textContent = c.imageScale + '%';
+                    setVal('pdfWmGridDensity', String(saved.gridDensity || 3));
+                    const gdv = document.getElementById('pdfWmGridVal'); if (gdv) gdv.textContent = `${saved.gridDensity || 3} × ${saved.gridDensity || 3}`;
+                    const autoEl = document.getElementById('pdfWmAutoAdjust');
+                    if (autoEl && c.autoAdjust !== undefined) autoEl.checked = !!c.autoAdjust;
+                    setVal('pdfWmAngle', c.angle);
+                    setPdfWatermarkAnglePreset(c.angle ?? 45);
+                    setVal('pdfWmOpacity', c.opacity);
+                    const opv = document.getElementById('pdfWmOpacityVal'); if (opv && c.opacity !== undefined) opv.textContent = c.opacity + '%';
+                    if (c.color) setPdfWatermarkColorSwatch(c.color);
+                    setVal('pdfWmPageScope', c.pageScope);
+                    setVal('pdfWmCustomRange', c.customRange);
+                    togglePdfWmCustomRange();
+
+                    if (saved.logoBlob) {
+                        const logoBytes = new Uint8Array(await saved.logoBlob.arrayBuffer());
+                        const logoUrl = await blobToDataUrlAsync(saved.logoBlob);
+                        const logoImg = await new Promise((res) => {
+                            const im = new Image();
+                            im.onload = () => res(im);
+                            im.onerror = () => res(null);
+                            im.src = logoUrl;
+                        });
+                        if (logoImg) {
+                            pdfWmState.imgFileBytes = logoBytes;
+                            pdfWmState.imgFileType = saved.logoType || saved.logoBlob.type || 'image/png';
+                            pdfWmState.imgElement = logoImg;
+                            pdfWmState.imgName = saved.logoName || 'logo.png';
+                            const logoBar = document.getElementById('pdfWmLogoBar');
+                            const thumb = document.getElementById('pdfWmLogoPreviewImg');
+                            const logoNameEl = document.getElementById('pdfWmLogoName');
+                            if (thumb) thumb.src = logoUrl;
+                            if (logoNameEl) logoNameEl.textContent = pdfWmState.imgName;
+                            if (logoBar) logoBar.style.display = 'flex';
+                        }
+                    }
+
+                    setPdfWatermarkAnchor(saved.anchor || 'center');
+                    setPdfWatermarkLayout(saved.layout || 'single');
+                    setPdfWatermarkTab(saved.activeTab || 'text');
+
+                    if (saved.pdfBlob) {
+                        const rawBytes = new Uint8Array(await saved.pdfBlob.arrayBuffer());
+                        const pdfDoc = await loadPdfDocumentSafe(rawBytes.slice(0), saved.pdfName || 'Document.pdf');
+                        let restoredFile;
+                        try {
+                            restoredFile = new File([saved.pdfBlob], saved.pdfName || 'Document.pdf', { type: 'application/pdf' });
+                        } catch (_) {
+                            restoredFile = { name: saved.pdfName || 'Document.pdf', size: saved.pdfBlob.size, type: 'application/pdf' };
+                        }
+                        pdfWmState.file = restoredFile;
+                        pdfWmState.rawPdfBytes = rawBytes;
+                        pdfWmState.pdfDoc = pdfDoc;
+                        pdfWmState.currentPage = Math.max(1, Math.min(pdfDoc.numPages || 1, saved.currentPage || 1));
+                        pdfWmState.basePageCanvas = null;
+                        pdfWmState.cachedPageDoc = null;
+                        pdfWmState.cachedPageNum = 0;
+                        renderPdfWatermarkStageState();
+                    }
+                } catch (e) {
+                    console.warn('restorePdfWatermarkSession error:', e);
+                } finally {
+                    _restoringEditorSession = false;
+                    resolve();
+                }
+            });
+        });
+        return true;
+    } catch (e) {
+        _restoringEditorSession = false;
+        console.warn('restorePdfWatermarkSession outer error:', e);
+        return false;
+    }
+}
+
+async function restoreAllEditorSessions() {
+    if (!window.ImagePDFEditorDB) return;
+    await restoreEditorMainSession();
+    await restoreImg2PdfSession();
+    await restorePdfOptSession();
+    await restorePdfWatermarkSession();
+}
+
+window.clearAllEditorSessions = async function() {
+    deleteEditorImage();
+    clearImg2Pdf();
+    clearPdfOptPages();
+    resetPdfWatermarkTool(true);
+    if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+        await Promise.all(Object.values(EDITOR_SESSION_KEYS).map(k => window.ImagePDFEditorDB.deleteEditorData(k)));
+    }
+};
 
 // ═══ CONTEXT MENU HELPERS: RESET & CLEAR FOR EDITOR / PDF TOOLS ═══
 window.hasEditorToolWork = function(scopeTool) {
@@ -4784,6 +5645,7 @@ window.resetActiveEditorTool = function(scopeTool) {
         const dp = document.getElementById('i2pDocProtection'); if (dp) dp.checked = true;
         const st = document.getElementById('i2pStats'); if (st) st.style.display = 'none';
         renderImg2PdfList();
+        scheduleEditorSessionSave('img2pdf', 200);
         showEditorStatus('↺ Images to PDF settings & rotations reset to defaults.', 'info');
         return;
     }
@@ -4803,6 +5665,7 @@ window.resetActiveEditorTool = function(scopeTool) {
         const pw = document.getElementById('pdfProcessWrap'); if (pw) pw.style.display = 'none';
         renderPdfOptPages();
         updatePdfEstimate();
+        scheduleEditorSessionSave('pdfopt', 200);
         showEditorStatus('↺ PDF Optimizer settings & rotations reset to defaults.', 'info');
         return;
     }

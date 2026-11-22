@@ -172,33 +172,46 @@ async function startServer() {
     }));
   }
 
-  // Explicit routes for studio subpages
-  app.get('/passport-photo-maker', (req, res) => {
-    const p = path.resolve(__dirname, 'passport-photo-maker/index.html');
-    const dist = path.resolve(__dirname, 'dist/passport-photo-maker/index.html');
-    const target = fs.existsSync(dist) ? dist : (fs.existsSync(p) ? p : path.resolve(__dirname, 'index.html'));
-    return res.sendFile(target);
-  });
+  // Explicit routes for all individual tool pages, legacy aliases, and info/legal routes (no redirects)
+  const CLEAN_HTML_ROUTES = [
+    '/document-enhance',
+    '/image-to-pdf',
+    '/pdf-compress',
+    '/document-studio',
+    '/id-card-print',
+    '/id-card-studio',
+    '/image-compress',
+    '/photo-resize',
+    '/image-crop',
+    '/image-convert',
+    '/image-adjust',
+    '/pdf-watermark',
+    '/image-pdf-editor',
+    '/passport-photo-maker',
+    '/about',
+    '/about-us',
+    '/contact',
+    '/contact-us',
+    '/privacy-policy',
+    '/terms-and-conditions',
+    '/copyright-policy',
+    '/disclaimer'
+  ];
 
-  app.get('/document-studio', (req, res) => {
-    const p = path.resolve(__dirname, 'document-studio/index.html');
-    const dist = path.resolve(__dirname, 'dist/document-studio/index.html');
-    const target = fs.existsSync(dist) ? dist : (fs.existsSync(p) ? p : path.resolve(__dirname, 'index.html'));
-    return res.sendFile(target);
-  });
-
-  app.get('/id-card-studio', (req, res) => {
-    const p = path.resolve(__dirname, 'id-card-studio/index.html');
-    const dist = path.resolve(__dirname, 'dist/id-card-studio/index.html');
-    const target = fs.existsSync(dist) ? dist : (fs.existsSync(p) ? p : path.resolve(__dirname, 'index.html'));
-    return res.sendFile(target);
-  });
-
-  app.get('/image-pdf-editor', (req, res) => {
-    const p = path.resolve(__dirname, 'image-pdf-editor/index.html');
-    const dist = path.resolve(__dirname, 'dist/image-pdf-editor/index.html');
-    const target = fs.existsSync(dist) ? dist : (fs.existsSync(p) ? p : path.resolve(__dirname, 'index.html'));
-    return res.sendFile(target);
+  app.get(CLEAN_HTML_ROUTES, (req, res) => {
+    const cleanSlug = req.path.replace(/^\/+|\/+$/g, '');
+    const distRouteFile = path.resolve(__dirname, 'dist', cleanSlug, 'index.html');
+    const distIndex = path.resolve(__dirname, 'dist/index.html');
+    const rootIndex = path.resolve(__dirname, 'index.html');
+    const target = fs.existsSync(distRouteFile)
+      ? distRouteFile
+      : fs.existsSync(distIndex)
+        ? distIndex
+        : rootIndex;
+    if (fs.existsSync(target)) {
+      return res.sendFile(target);
+    }
+    res.status(404).send('Page not found.');
   });
 
   // Fallback HTML navigation handler

@@ -397,6 +397,7 @@ function scheduleStudioDBSave(delay = 500) {
 }
 
 async function saveStudioToDB(modeToSave) {
+    if (!dbLoaded) return;
     const targetMode = modeToSave || currentMode;
     if (targetMode !== 'DOC' && targetMode !== 'ID') return;
     saveStudioState(targetMode);
@@ -456,7 +457,11 @@ async function saveStudioToDB(modeToSave) {
         };
         await window.DocIDStudioDB.put('idCardData', idPayload);
     } catch (err) {
-        console.warn('saveStudioToDB error:', err);
+        if (err && (err.name === 'QuotaExceededError' || err.code === 22)) {
+            console.warn('saveStudioToDB quota exceeded — keeping in-memory workspace intact.');
+        } else {
+            console.warn('saveStudioToDB error:', err);
+        }
     }
 }
 
@@ -469,8 +474,28 @@ async function loadStudioFromDB() {
         const docData = await window.DocIDStudioDB.get('documentData', 'session');
         const idData = await window.DocIDStudioDB.get('idCardData', 'session');
 
+        if (docData) {
+            if (docData.contrast !== undefined) docStudioState.contrast = docData.contrast;
+            if (docData.brightness !== undefined) docStudioState.brightness = docData.brightness;
+            if (docData.saturation !== undefined) docStudioState.saturation = docData.saturation;
+            if (docData.sharpness !== undefined) docStudioState.sharpness = docData.sharpness;
+            if (docData.rotation !== undefined) docStudioState.rotation = docData.rotation;
+            if (docData.filterMode) docStudioState.filterMode = docData.filterMode;
+            if (docData.shadowRemovalActive !== undefined) docStudioState.shadowRemovalActive = !!docData.shadowRemovalActive;
+            if (docData.zoomSrc !== undefined) docStudioState.zoomSrc = docData.zoomSrc;
+            if (docData.panSrc) docStudioState.panSrc = docData.panSrc;
+            if (docData.zoomDst !== undefined) docStudioState.zoomDst = docData.zoomDst;
+            if (docData.panDst) docStudioState.panDst = docData.panDst;
+            if (docData.corners) docStudioState.corners = docData.corners;
+            if (docData.activeIndex !== undefined) docStudioState.activeIndex = docData.activeIndex;
+        }
+
         let restoredImages = [];
-        const sourceData = (docData && Array.isArray(docData.images) && docData.images.length > 0) ? docData : (idData && Array.isArray(idData.images) && idData.images.length > 0 ? idData : null);
+        const sourceData = (currentMode === 'ID' && idData && Array.isArray(idData.images) && idData.images.length > 0)
+            ? idData
+            : ((docData && Array.isArray(docData.images) && docData.images.length > 0)
+                ? docData
+                : (idData && Array.isArray(idData.images) && idData.images.length > 0 ? idData : null));
 
         if (sourceData && Array.isArray(sourceData.images)) {
             for (const item of sourceData.images) {
@@ -479,14 +504,35 @@ async function loadStudioFromDB() {
             }
         }
         if (restoredImages.length > 0) {
-            imageArray = restoredImages;
-            activeIndex = Math.min(Math.max(0, sourceData.activeIndex !== undefined ? sourceData.activeIndex : 0), restoredImages.length - 1);
+            imageArray = imageArray.length > 0 ? restoredImages.concat(imageArray) : restoredImages;
+            activeIndex = Math.min(Math.max(0, sourceData.activeIndex !== undefined ? sourceData.activeIndex : 0), imageArray.length - 1);
             if (sourceData.corners) corners = sourceData.corners;
             if (sourceData.filterMode) filterMode = sourceData.filterMode;
             shadowRemovalActive = !!sourceData.shadowRemovalActive;
         }
 
         if (idData) {
+            if (idData.contrast !== undefined) idStudioState.contrast = idData.contrast;
+            if (idData.brightness !== undefined) idStudioState.brightness = idData.brightness;
+            if (idData.saturation !== undefined) idStudioState.saturation = idData.saturation;
+            if (idData.sharpness !== undefined) idStudioState.sharpness = idData.sharpness;
+            if (idData.rotation !== undefined) idStudioState.rotation = idData.rotation;
+            if (idData.filterMode) idStudioState.filterMode = idData.filterMode;
+            if (idData.shadowRemovalActive !== undefined) idStudioState.shadowRemovalActive = !!idData.shadowRemovalActive;
+            if (idData.activeSlot !== undefined) {
+                idStudioState.activeSlot = idData.activeSlot;
+                activeSlot = idData.activeSlot;
+            }
+            if (idData.idSlotGeometry) {
+                idStudioState.idSlotGeometry = idData.idSlotGeometry;
+                idSlotGeometry = idData.idSlotGeometry;
+            }
+            if (idData.idOrientation) idStudioState.idOrientation = idData.idOrientation;
+            if (idData.checkCropMarks !== undefined) idStudioState.checkCropMarks = !!idData.checkCropMarks;
+            if (idData.zoomSrc !== undefined) idStudioState.zoomSrc = idData.zoomSrc;
+            if (idData.panSrc) idStudioState.panSrc = idData.panSrc;
+            if (idData.zoomDst !== undefined) idStudioState.zoomDst = idData.zoomDst;
+            if (idData.panDst) idStudioState.panDst = idData.panDst;
             if (idData.idLeftDataUrl) {
                 idStudioState.idLeftCanvas = await createCanvasFromDataUrl(idData.idLeftDataUrl);
                 idLeftCanvas = idStudioState.idLeftCanvas;
@@ -578,6 +624,11 @@ async function loadStudioFromDB() {
                 setActiveImage(activeIndex);
             }
         } else if (currentMode === 'ID') {
+            const orientEl = document.getElementById('control-id-orientation');
+            if (orientEl && idStudioState.idOrientation) orientEl.value = idStudioState.idOrientation;
+            const cmEl = document.getElementById('check-crop-marks');
+            if (cmEl) cmEl.checked = idStudioState.checkCropMarks !== false;
+
             rebuildGalleryStrip();
             rebuildBucketDOM();
             updateButtonStates();
@@ -596,6 +647,8 @@ async function loadStudioFromDB() {
         }
     } catch (err) {
         console.warn('loadStudioFromDB error:', err);
+    } finally {
+        dbLoaded = true;
     }
 }
 
@@ -631,6 +684,22 @@ function importImagesFromOtherStudio() {
 
 window.addEventListener('DOMContentLoaded', () => {
     loadStudioFromDB();
+    const cmEl = document.getElementById('check-crop-marks');
+    if (cmEl) {
+        cmEl.addEventListener('change', () => scheduleStudioDBSave(150));
+    }
+});
+
+window.addEventListener('pagehide', () => {
+    if (currentMode === 'DOC' || currentMode === 'ID') {
+        saveStudioToDB(currentMode);
+    }
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && (currentMode === 'DOC' || currentMode === 'ID')) {
+        saveStudioToDB(currentMode);
+    }
 });
 
 // Studio State Isolation
@@ -795,7 +864,7 @@ function switchMode(mode) {
     const previousMode = currentMode;
     if (previousMode === 'DOC' || previousMode === 'ID') {
         saveStudioState(previousMode);
-        saveStudioToDB(previousMode);
+        if (dbLoaded) saveStudioToDB(previousMode);
     }
     cleanupModuleResources(previousMode, mode);
     currentMode = mode;
@@ -921,7 +990,7 @@ function switchMode(mode) {
             document.getElementById('badge-dst-dim').innerText = "Scanned Output View";
             document.getElementById('screen2-title').innerText = "Live Filter Output Render";
         }
-        saveStudioToDB('DOC');
+        if (dbLoaded) saveStudioToDB('DOC');
     } else if (mode === 'ID') {
         if (tabDoc) tabDoc.className = 'mode-tab'; 
         if (tabId) tabId.className = 'mode-tab active';
@@ -1031,7 +1100,7 @@ function switchMode(mode) {
             }
             drawIDPreviewComposite();
         }
-        saveStudioToDB('ID');
+        if (dbLoaded) saveStudioToDB('ID');
     } else if (mode === 'EDITOR') {
         if (tabDoc) tabDoc.className = 'mode-tab'; 
         if (tabId) tabId.className = 'mode-tab';
@@ -1053,7 +1122,7 @@ function switchMode(mode) {
     }
 }
 
-window.switchDocStudioTool = function(subTool, triggerBtn) {
+window.switchDocStudioTool = function(subTool, triggerBtn, skipRouteSync = false) {
     const normalized = (subTool === 'img2pdf' || subTool === 'pdfcompress') ? subTool : 'scanner';
     docStudioActiveSubTool = normalized;
     window._docStudioActiveSubTool = normalized;
@@ -1090,8 +1159,13 @@ window.switchDocStudioTool = function(subTool, triggerBtn) {
             editorWs.style.display = 'flex';
         }
         if (typeof window.switchTool === 'function') {
-            window.switchTool(normalized, null);
+            window.switchTool(normalized, null, true);
         }
+    }
+
+    if (!skipRouteSync && !window._monuSyncingRoute && window.MonuRouter && typeof window.MonuRouter.syncToolRoute === 'function') {
+        const targetRoute = normalized === 'img2pdf' ? '/image-to-pdf' : (normalized === 'pdfcompress' ? '/pdf-compress' : '/document-enhance');
+        window.MonuRouter.syncToolRoute(targetRoute);
     }
 };
 
@@ -2831,10 +2905,19 @@ window.MonuStorageManager = {
                 const tx = db.transaction('editorProjects', 'readonly');
                 const store = tx.objectStore('editorProjects');
                 const req = store.getAll();
-                editorProjectCount = await new Promise(r => {
-                    req.onsuccess = () => r((req.result || []).length);
-                    req.onerror = () => r(0);
+                const records = await new Promise(r => {
+                    req.onsuccess = () => r(req.result || []);
+                    req.onerror = () => r([]);
                 });
+                editorProjectCount = records.filter(rec => {
+                    if (!rec || !rec.data) return false;
+                    if (rec.id === 'editor_active_session') return !!(rec.data.origBlob || rec.data.currentBlob);
+                    if (rec.id === 'editor_img2pdf_session') return Array.isArray(rec.data.items) && rec.data.items.length > 0;
+                    if (rec.id === 'editor_pdfopt_session') return Array.isArray(rec.data.pages) && rec.data.pages.length > 0;
+                    if (rec.id === 'editor_pdfwm_session') return !!(rec.data.pdfBlob);
+                    if (rec.id === 'passport_active_session') return !!(rec.data.origBlob);
+                    return false;
+                }).length;
             }
         } catch(e) {
             console.warn('ImagePDFEditorDB summary read error:', e);
@@ -2923,6 +3006,12 @@ window.MonuStorageManager = {
 
         if (cfg.editorProjects) {
             try {
+                if (typeof window.clearAllEditorSessions === 'function') {
+                    await window.clearAllEditorSessions();
+                }
+                if (typeof window.clearSavedPassportSession === 'function') {
+                    await window.clearSavedPassportSession();
+                }
                 if (window.ImagePDFEditorDB) {
                     const db = await window.ImagePDFEditorDB.init();
                     await new Promise((res, rej) => {
@@ -2932,7 +3021,7 @@ window.MonuStorageManager = {
                         tx.onerror = (e) => rej(e.target.error);
                     });
                 }
-                cleared.push('Image Editor saved items');
+                cleared.push('Image Editor & Passport Maker saved items');
             } catch (e) {
                 failures.push('Image Editor storage');
             }
@@ -3041,7 +3130,16 @@ window.MonuStorageManager = {
             if (typeof rebuildBucketDOM === 'function') rebuildBucketDOM();
             if (typeof clearStudioCanvases === 'function') clearStudioCanvases();
             if (typeof updateButtonStates === 'function') updateButtonStates();
-            if (typeof resetEditorImage === 'function') resetEditorImage();
+            if (typeof window.clearAllEditorSessions === 'function') {
+                await window.clearAllEditorSessions();
+            } else if (typeof deleteEditorImage === 'function') {
+                deleteEditorImage();
+            }
+            if (typeof window.clearSavedPassportSession === 'function') {
+                await window.clearSavedPassportSession();
+            } else if (typeof window.clearPassportWork === 'function') {
+                window.clearPassportWork();
+            }
 
             // Restore empty message placeholders
             const srcEmpty = document.getElementById('src-empty-msg');
@@ -3253,7 +3351,7 @@ async function sendStudioTo(studioType, destination) {
         ? 'img2pdf'
         : (destination === 'pdfcompress' ? 'pdfcompress' : 'compress');
     const isPdfTarget = (targetTool === 'img2pdf' || targetTool === 'pdfcompress');
-    const targetRoute = isPdfTarget ? ('/document-studio?tool=' + targetTool) : '/image-pdf-editor';
+    const targetRoute = targetTool === 'img2pdf' ? '/image-to-pdf' : (targetTool === 'pdfcompress' ? '/pdf-compress' : '/image-compress');
     const payload = {
         source: sourceLabel,
         targetTool,
@@ -3270,7 +3368,7 @@ async function sendStudioTo(studioType, destination) {
                 switchMode('DOC');
             }
             if (typeof window.switchDocStudioTool === 'function') {
-                window.switchDocStudioTool(targetTool);
+                window.switchDocStudioTool(targetTool, null, true);
             }
             await window.receiveCrossStudioTransfer(payload);
             return;
@@ -3279,7 +3377,7 @@ async function sendStudioTo(studioType, destination) {
         const hasSpaEditor = !!document.getElementById('page-editor-studio');
         if (hasSpaEditor && typeof window.receiveCrossStudioTransfer === 'function') {
             if (typeof MonuRouter !== 'undefined' && MonuRouter.navigateTo) {
-                MonuRouter.navigateTo('/image-pdf-editor');
+                MonuRouter.navigateTo('/image-compress');
             } else if (typeof switchMode === 'function') {
                 switchMode('EDITOR');
             }

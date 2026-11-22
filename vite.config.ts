@@ -1,14 +1,410 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
-import {VitePWA} from 'vite-plugin-pwa';
+import { defineConfig, type Plugin } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+interface StaticRouteMeta {
+  slug: string;
+  pageId: string;
+  navPath: string;
+  canonical?: string;
+  title: string;
+  description: string;
+  keywords?: string;
+  h1?: string;
+  heroDesc?: string;
+  breadcrumb?: string;
+}
+
+const STATIC_ROUTE_META: StaticRouteMeta[] = [
+  {
+    slug: '/document-enhance',
+    pageId: 'page-doc-studio',
+    navPath: '/document-enhance',
+    title: 'Document Enhancer – Remove Shadows & Clean Scanned Docs | SMART VLE TOOL',
+    description: 'Straighten tilted scans, remove dark mobile shadows, brighten backgrounds, and produce crisp A4 printouts locally in your browser.',
+    keywords: 'document enhancer, remove shadow from document online, clean scanned document for print, whiten document background, mobile photo to scan print, vle document cleaner',
+    h1: 'Document Studio – Document Enhancer',
+    heroDesc: 'Straighten tilted mobile photos, remove dark shadows, adjust contrast and brightness, and export crisp A4 printouts or enhanced scans locally inside your browser.',
+    breadcrumb: 'Document Enhancer',
+  },
+  {
+    slug: '/image-to-pdf',
+    pageId: 'page-doc-studio',
+    navPath: '/document-enhance',
+    title: 'Images to PDF – Combine Photos into a Multi-Page PDF | SMART VLE TOOL',
+    description: 'Compile multiple scanned documents or images into one properly sized A4/Letter multi-page PDF with custom margins, rotation, and target file size.',
+    keywords: 'image to pdf, jpg to pdf converter online, combine images into pdf, multi page pdf creator, vle pdf compiler',
+    h1: 'Images to PDF – Multi-Page PDF Compiler',
+    heroDesc: 'Combine multiple scanned pages or photos into one ordered PDF document with page rotation, custom margins, page numbers, and target KB/MB optimization.',
+    breadcrumb: 'Images to PDF',
+  },
+  {
+    slug: '/pdf-compress',
+    pageId: 'page-doc-studio',
+    navPath: '/document-enhance',
+    title: 'PDF Optimizer – Organize, Rotate & Compress PDF Files | SMART VLE TOOL',
+    description: 'Reorder, rotate, merge, compress, or boost PDF file sizes inside your browser for government portals, scholarship uploads, and document submissions.',
+    keywords: 'pdf compressor, pdf optimizer, reduce pdf file size in kb, organize pdf pages, reorder delete pdf pages, compress pdf online',
+    h1: 'PDF Optimizer – Organize & Compress PDF',
+    heroDesc: 'Reorder, rotate, merge, remove pages, and compress multi-page PDF files toward exact KB/MB limits locally inside your browser.',
+    breadcrumb: 'PDF Optimizer',
+  },
+  {
+    slug: '/document-studio',
+    pageId: 'page-doc-studio',
+    navPath: '/document-enhance',
+    canonical: '/document-enhance',
+    title: 'Document Studio – Document Enhancer, Images to PDF & PDF Optimizer',
+    description: 'Clean mobile-captured documents online. Straighten tilted scans, remove shadows, compile images to PDF, and compress PDF files locally in your browser.',
+    keywords: 'document studio, document enhancer, remove shadow from document online, image to pdf, pdf optimizer',
+    h1: 'Document Studio',
+    breadcrumb: 'Document Studio',
+  },
+  {
+    slug: '/id-card-print',
+    pageId: 'page-id-studio',
+    navPath: '/id-card-print',
+    title: 'ID Card Studio – Print Front & Back ID Card on One A4 Page',
+    description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards to standard card dimensions on a single A4 page for printing.',
+    keywords: 'id card print, front and back id card print on one page, aadhaar card print layout a4, straighten tilted id card, pvc card size print on a4, csc id card print tool',
+    h1: 'ID Card Studio – Dual-Slot Identity Card Framing & A4 Print Layout',
+    heroDesc: 'Clean, crop, and align Front and Back ID card sides to exact CR80 card proportions on a single printable A4 layout sheet inside your browser.',
+    breadcrumb: 'ID Card Studio',
+  },
+  {
+    slug: '/id-card-studio',
+    pageId: 'page-id-studio',
+    navPath: '/id-card-print',
+    canonical: '/id-card-print',
+    title: 'ID Card Studio – Print Front & Back ID Card on One A4 Page',
+    description: 'Straighten, clean, and align front and back sides of Aadhaar, PAN, or Voter ID cards to standard card dimensions on a single A4 page for printing.',
+    keywords: 'id card studio, front and back id card print on one page, aadhaar card print layout a4, straighten tilted id card, pvc card size print on a4, csc id card print tool',
+    h1: 'ID Card Studio – Dual-Slot Identity Card Framing & A4 Print Layout',
+    breadcrumb: 'ID Card Studio',
+  },
+  {
+    slug: '/image-compress',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'Compress or Increase Image Size in KB Online | SMART VLE TOOL',
+    description: 'Compress or increase image file size to exact KB targets at 300 DPI for SSC, UPSC, PAN, and government job forms directly in your browser.',
+    keywords: 'image compress in kb, reduce image size kb, increase image size in kb, 20kb 50kb photo compressor, 300 dpi photo compress',
+    h1: 'Compress / Increase Image Size in KB',
+    heroDesc: 'Compress or increase JPG, PNG, and WEBP images to exact target KB limits with optional 300 DPI metadata and visual clarity.',
+    breadcrumb: 'Compress / Increase KB',
+  },
+  {
+    slug: '/photo-resize',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'Photo & Signature Resizer in Pixels, CM, MM & Inches | SMART VLE TOOL',
+    description: 'Resize passport photos, signatures, and application images to exact pixel, centimeter, millimeter, or inch dimensions locally in your browser.',
+    keywords: 'photo resize, signature resizer, resize image in pixels cm mm inches, online form photo resizer',
+    h1: 'Photo & Signature Resizer',
+    heroDesc: 'Resize photos and signatures accurately across Pixels (px), Inches (in), Centimeters (cm), and Millimeters (mm) with aspect ratio locking.',
+    breadcrumb: 'Photo & Signature Resizer',
+  },
+  {
+    slug: '/image-crop',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'Crop, Flip & Rotate Image Online with Precision | SMART VLE TOOL',
+    description: 'Crop photos to preset or custom dimensions, trim white margins automatically, flip horizontally/vertically, and rotate by any angle in your browser.',
+    keywords: 'image crop online, rotate image custom angle, flip image horizontally vertically, passport size crop',
+    h1: 'Crop, Flip & Rotate Image',
+    heroDesc: 'Crop images cleanly using interactive handles or exact measurements, flip horizontally or vertically, and straighten tilted images.',
+    breadcrumb: 'Crop, Flip & Rotate',
+  },
+  {
+    slug: '/image-convert',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'Image Format Converter – JPG, PNG, WEBP, BMP & AVIF | SMART VLE TOOL',
+    description: 'Convert images seamlessly between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats with quality and target KB controls inside your browser.',
+    keywords: 'image format converter, png to jpg, webp to jpg, convert image format online',
+    h1: 'Image Format Converter',
+    heroDesc: 'Convert photos and scanned documents between JPG, PNG, WEBP, BMP, TIFF, and AVIF formats with instant preview and target KB tuning.',
+    breadcrumb: 'Format Converter',
+  },
+  {
+    slug: '/image-adjust',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'Adjust Image Brightness, Contrast & RGB Color Balance | SMART VLE TOOL',
+    description: 'Fine-tune photo brightness, contrast, saturation, hue, and Shadows/Midtones/Highlights RGB color balance directly in your web browser.',
+    keywords: 'adjust brightness contrast online, image color balance, rgb adjustment photo tool',
+    h1: 'Adjust Color & RGB Balance',
+    heroDesc: 'Tune brightness, contrast, saturation, hue, and professional Shadows/Midtones/Highlights RGB balance in real time.',
+    breadcrumb: 'Adjust Color & RGB',
+  },
+  {
+    slug: '/pdf-watermark',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    title: 'PDF Watermark – Add Text or Logo Watermarks to PDF | SMART VLE TOOL',
+    description: 'Stamp custom text or logo watermarks onto single or multiple PDF pages with tiled grid or anchor layouts and live browser preview.',
+    keywords: 'pdf watermark online, add text watermark to pdf, add logo watermark pdf, confidential pdf stamp',
+    h1: 'PDF Watermark Tool',
+    heroDesc: 'Apply customizable text or logo watermarks in single-anchor or tiled grids across selected or all PDF pages locally in your browser.',
+    breadcrumb: 'PDF Watermark',
+  },
+  {
+    slug: '/image-pdf-editor',
+    pageId: 'page-editor-studio',
+    navPath: '/image-compress',
+    canonical: '/image-compress',
+    title: 'Image Editor – Compress to KB, Resize, Crop, Convert & PDF Watermark',
+    description: 'Resize and compress images toward target KB limits at 300 DPI for online forms. Crop, adjust color, convert formats, and apply custom PDF watermarks online.',
+    keywords: 'image editor, resize photo in kb, compress image 300 dpi, increase image size in kb, crop image online, convert image format, adjust image brightness contrast, pdf watermark',
+    h1: 'Image Editor – Compress to KB, Resize, Crop & Convert',
+    breadcrumb: 'Image Editor',
+  },
+  {
+    slug: '/passport-photo-maker',
+    pageId: 'page-passport-maker',
+    navPath: '/passport-photo-maker',
+    title: 'Passport Photo Maker – Remove Background & Print Photos Online',
+    description: 'Remove photo backgrounds, change background color (white, light blue, cream), crop to passport size, and print photo sheets.',
+    keywords: 'passport photo maker, remove background passport photo, passport size photo online, change passport background color',
+    h1: 'Passport Photo Maker',
+    breadcrumb: 'Passport Photo Maker',
+  },
+  {
+    slug: '/about',
+    pageId: 'page-about',
+    navPath: '/about-us',
+    canonical: '/about-us',
+    title: 'About Us – SMART VLE TOOL Online Utility Platform',
+    description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
+  },
+  {
+    slug: '/about-us',
+    pageId: 'page-about',
+    navPath: '/about-us',
+    title: 'About Us – SMART VLE TOOL Online Utility Platform',
+    description: 'Learn about SMART VLE TOOL, an online platform offering practical document scanning, ID card printing, passport photo making and image editing tools.',
+  },
+  {
+    slug: '/contact',
+    pageId: 'page-contact',
+    navPath: '/contact-us',
+    canonical: '/contact-us',
+    title: 'Contact Us – SMART VLE TOOL Support & Feedback',
+    description: 'Get in touch with the SMART VLE TOOL team for support, feature feedback, technical questions, or general inquiries regarding our utility suite.',
+  },
+  {
+    slug: '/contact-us',
+    pageId: 'page-contact',
+    navPath: '/contact-us',
+    title: 'Contact Us – SMART VLE TOOL Support & Feedback',
+    description: 'Get in touch with the SMART VLE TOOL team for support, feature feedback, technical questions, or general inquiries regarding our utility suite.',
+  },
+  {
+    slug: '/privacy-policy',
+    pageId: 'page-privacy',
+    navPath: '/privacy-policy',
+    title: 'Privacy Policy – SMART VLE TOOL Data Protection Practices',
+    description: 'Read our transparent privacy policy. Discover how SMART VLE TOOL processes supported files in-browser, local storage data management, and AdSense disclosures.',
+  },
+  {
+    slug: '/terms-and-conditions',
+    pageId: 'page-terms',
+    navPath: '/terms-and-conditions',
+    title: 'Terms and Conditions – SMART VLE TOOL',
+    description: 'Review the terms and conditions for using SMART VLE TOOL online image editing, scanned document enhancement, and PDF tools.',
+  },
+  {
+    slug: '/copyright-policy',
+    pageId: 'page-copyright',
+    navPath: '/copyright-policy',
+    title: 'Copyright Policy – SMART VLE TOOL',
+    description: 'Review our copyright policy, user ownership of uploaded files, DMCA notice procedures, and intellectual property guidelines.',
+  },
+  {
+    slug: '/disclaimer',
+    pageId: 'page-disclaimer',
+    navPath: '/disclaimer',
+    title: 'Disclaimer – SMART VLE TOOL',
+    description: 'Important legal and utility disclaimer regarding document processing quality, non-affiliation with government entities, and user verification responsibilities.',
+  },
+];
+
+function escapeHtmlAttr(val: string): string {
+  return val
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlText(val: string): string {
+  return val
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function smartvleStaticRoutesPlugin(): Plugin {
+  return {
+    name: 'smartvle-static-routes-generator',
+    apply: 'build',
+    closeBundle() {
+      const distDir = path.resolve(__dirname, 'dist');
+      const baseHtmlPath = path.join(distDir, 'index.html');
+      if (!fs.existsSync(baseHtmlPath)) return;
+
+      const baseHtml = fs.readFileSync(baseHtmlPath, 'utf-8');
+      const baseOrigin = 'https://smartvletool.in';
+
+      for (const route of STATIC_ROUTE_META) {
+        const canonicalPath = route.canonical || route.slug;
+        const canonicalUrl = `${baseOrigin}${canonicalPath}`;
+        const safeTitle = escapeHtmlText(route.title);
+        const safeDescAttr = escapeHtmlAttr(route.description);
+
+        let html = baseHtml
+          .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
+          .replace(
+            /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+            `<meta name="description" content="${safeDescAttr}" />`
+          )
+          .replace(
+            /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+            `<link rel="canonical" href="${canonicalUrl}" />`
+          )
+          .replace(
+            /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i,
+            `<meta property="og:title" content="${escapeHtmlAttr(route.title)}" />`
+          )
+          .replace(
+            /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
+            `<meta property="og:description" content="${safeDescAttr}" />`
+          )
+          .replace(
+            /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
+            `<meta property="og:url" content="${canonicalUrl}" />`
+          )
+          .replace(
+            /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i,
+            `<meta name="twitter:title" content="${escapeHtmlAttr(route.title)}" />`
+          )
+          .replace(
+            /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
+            `<meta name="twitter:description" content="${safeDescAttr}" />`
+          );
+
+        if (route.keywords) {
+          html = html.replace(
+            /<meta\s+name="keywords"\s+content="[^"]*"\s*\/?>/i,
+            `<meta name="keywords" content="${escapeHtmlAttr(route.keywords)}" />`
+          );
+        }
+
+        // Toggle visible <main> so SSR/static crawlers see the route's main section directly
+        html = html.replace(
+          '<main class="page-view" id="page-home">',
+          '<main class="page-view hidden" id="page-home">'
+        );
+        html = html.replace(
+          `<main class="page-view hidden" id="${route.pageId}">`,
+          `<main class="page-view" id="${route.pageId}">`
+        );
+
+        // Update nav active links cleanly
+        html = html.replace(
+          /href="\/"\s+class="site-nav-link active"/g,
+          'href="/" class="site-nav-link"'
+        );
+        if (route.navPath !== '/') {
+          const escapedNav = route.navPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          html = html.replace(
+            new RegExp(`href="${escapedNav}"\\s+class="site-nav-link"`, 'g'),
+            `href="${route.navPath}" class="site-nav-link active"`
+          );
+        }
+
+        // Update target page hero H1, description & breadcrumb inside its section block
+        const startMarker = `<main class="page-view" id="${route.pageId}">`;
+        const startIdx = html.indexOf(startMarker);
+        if (startIdx !== -1) {
+          const endIdx = html.indexOf('</main>', startIdx);
+          if (endIdx !== -1) {
+            let section = html.slice(startIdx, endIdx);
+            if (route.h1) {
+              if (section.includes('class="tool-intro-h1"')) {
+                section = section.replace(
+                  /<h1\s+class="tool-intro-h1">[\s\S]*?<\/h1>/,
+                  `<h1 class="tool-intro-h1">${escapeHtmlText(route.h1)}</h1>`
+                );
+              } else {
+                section = section.replace(
+                  /<h1\s+class="section-title">[\s\S]*?<\/h1>/,
+                  `<h1 class="section-title">${escapeHtmlText(route.h1)}</h1>`
+                );
+              }
+            }
+            if (route.heroDesc) {
+              section = section.replace(
+                /<p\s+class="tool-intro-desc">[\s\S]*?<\/p>/,
+                `<p class="tool-intro-desc">${escapeHtmlText(route.heroDesc)}</p>`
+              );
+            }
+            if (route.breadcrumb) {
+              section = section.replace(
+                /<span\s+class="breadcrumb-current">[\s\S]*?<\/span>/,
+                `<span class="breadcrumb-current">${escapeHtmlText(route.breadcrumb)}</span>`
+              );
+            }
+            html = html.slice(0, startIdx) + section + html.slice(endIdx);
+          }
+        }
+
+        const routeDir = path.join(distDir, route.slug.replace(/^\/+/, ''));
+        fs.mkdirSync(routeDir, { recursive: true });
+        fs.writeFileSync(path.join(routeDir, 'index.html'), html, 'utf-8');
+      }
+
+      // GitHub Pages static fallback 404.html preserving full path + query + hash
+      const notFoundHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMART VLE TOOL</title>
+  <meta name="robots" content="noindex">
+  <script>
+    (function () {
+      var target = location.pathname + location.search;
+      var hash = location.hash || '';
+      location.replace('/?p=' + encodeURIComponent(target) + hash);
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting to SMART VLE TOOL...</p>
+</body>
+</html>
+`;
+      fs.writeFileSync(path.join(distDir, '404.html'), notFoundHtml, 'utf-8');
+
+      // Copy CNAME for GitHub Pages custom domain
+      const cnameSrc = path.resolve(__dirname, 'CNAME');
+      if (fs.existsSync(cnameSrc)) {
+        fs.copyFileSync(cnameSrc, path.join(distDir, 'CNAME'));
+      }
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     plugins: [
       react(),
       tailwindcss(),
+      smartvleStaticRoutesPlugin(),
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: false,
@@ -76,8 +472,7 @@ export default defineConfig(() => {
           skipWaiting: true,
           clientsClaim: true,
           cleanupOutdatedCaches: true,
-          navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/assets\//, /^\/videos\//, /^\/mediapipe\//],
+          navigateFallback: null,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/docs\.opencv\.org\/.*/i,
@@ -162,18 +557,6 @@ export default defineConfig(() => {
         },
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          documentStudio: path.resolve(__dirname, 'document-studio/index.html'),
-          idCardStudio: path.resolve(__dirname, 'id-card-studio/index.html'),
-          imagePdfEditor: path.resolve(__dirname, 'image-pdf-editor/index.html'),
-          passportPhotoMaker: path.resolve(__dirname, 'passport-photo-maker/index.html'),
-          about: path.resolve(__dirname, 'about/index.html'),
-          aboutUs: path.resolve(__dirname, 'about-us/index.html'),
-          contact: path.resolve(__dirname, 'contact/index.html'),
-          contactUs: path.resolve(__dirname, 'contact-us/index.html'),
-          privacyPolicy: path.resolve(__dirname, 'privacy-policy/index.html'),
-          termsAndConditions: path.resolve(__dirname, 'terms-and-conditions/index.html'),
-          copyrightPolicy: path.resolve(__dirname, 'copyright-policy/index.html'),
-          disclaimer: path.resolve(__dirname, 'disclaimer/index.html'),
         },
       },
     },

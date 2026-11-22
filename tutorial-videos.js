@@ -57,35 +57,31 @@
         video.setAttribute('poster', posterSrc);
       }
 
-      function showFallback(mode, message) {
+      function hideUnavailableCard() {
         if (video) {
           video.pause();
-          video.style.display = 'none';
         }
-        if (overlay) overlay.style.display = 'none';
-        if (fallback) {
-          fallback.hidden = false;
-          fallback.setAttribute('data-state', mode);
-        }
-        if (fallbackTitle) {
-          fallbackTitle.textContent = cfg.placeholderTitle || (cfg.title ? cfg.title + ' Video' : 'Tutorial Video');
-        }
-        if (fallbackMsg) {
-          fallbackMsg.textContent = message;
-        }
-        if (retryBtn) {
-          retryBtn.style.display = mode === 'error' ? 'inline-flex' : 'none';
+        card.style.display = 'none';
+        var section = document.getElementById('tutorial-videos');
+        if (section) {
+          var visibleCards = Array.prototype.filter.call(cards, function (c) {
+            return c.style.display !== 'none';
+          });
+          if (visibleCards.length === 0) {
+            section.style.display = 'none';
+          }
         }
       }
 
       function showPlayer() {
+        card.style.display = '';
         if (fallback) fallback.hidden = true;
         if (video) video.style.display = 'block';
         if (overlay && video.paused) overlay.style.display = 'flex';
       }
 
       if (!videoSrc) {
-        showFallback('coming-soon', 'Tutorial video coming soon');
+        hideUnavailableCard();
         return;
       }
 
@@ -141,32 +137,19 @@
         });
       });
 
-      // Show overlay again only if user hasn't started or returns to start
+      // Show overlay again only if user returns to start/ends playback
       video.addEventListener('ended', function () {
         if (overlay) overlay.style.display = 'flex';
       });
 
       function handleVideoError() {
-        // Distinguish between missing file (404 / HTML fallback -> coming soon) and playback error
-        fetch(videoSrc, { method: 'HEAD' })
-          .then(function (res) {
-            var contentType = (res.headers.get('content-type') || '').toLowerCase();
-            if (res.status === 404 || res.status === 410 || contentType.indexOf('text/html') !== -1) {
-              showFallback('coming-soon', 'Tutorial video coming soon');
-            } else {
-              showFallback('error', 'Unable to load this tutorial video right now. Please try again.');
-            }
-          })
-          .catch(function () {
-            showFallback('error', 'Unable to play video. Please check your connection and try again.');
-          });
+        hideUnavailableCard();
       }
 
       if (source) {
         source.addEventListener('error', handleVideoError);
       }
       video.addEventListener('error', function () {
-        // Only trigger if video has a src and actually failed
         if (videoSrc) {
           handleVideoError();
         }

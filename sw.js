@@ -3,19 +3,36 @@
  * Complete offline caching for Document Studio, ID Card Studio, Image Editor & Passport Photo Maker
  */
 
-const CACHE_NAME = 'monu-offline-v3.2';
+const CACHE_NAME = 'monu-offline-v3.3';
 
 const PRECACHE_URLS = [
   '/',
   '/index.html',
-  '/document-studio',
-  '/document-studio/index.html',
-  '/id-card-studio',
-  '/id-card-studio/index.html',
-  '/image-pdf-editor',
-  '/image-pdf-editor/index.html',
+  '/document-enhance',
+  '/document-enhance/index.html',
+  '/image-to-pdf',
+  '/image-to-pdf/index.html',
+  '/pdf-compress',
+  '/pdf-compress/index.html',
+  '/id-card-print',
+  '/id-card-print/index.html',
+  '/image-compress',
+  '/image-compress/index.html',
+  '/photo-resize',
+  '/photo-resize/index.html',
+  '/image-crop',
+  '/image-crop/index.html',
+  '/image-convert',
+  '/image-convert/index.html',
+  '/image-adjust',
+  '/image-adjust/index.html',
+  '/pdf-watermark',
+  '/pdf-watermark/index.html',
   '/passport-photo-maker',
   '/passport-photo-maker/index.html',
+  '/document-studio',
+  '/id-card-studio',
+  '/image-pdf-editor',
   '/about-us',
   '/about-us/index.html',
   '/contact-us',

@@ -44,6 +44,316 @@
     let passPrintScaleOffset = 0; // -50 to +50 (% scale adjustment in Print Preview)
 
     let isProcessingBg = false;
+    let passOrigDataUrl = null;
+    let _restoringPassportSession = false;
+    let _passportSaveTimer = null;
+    const PASSPORT_SESSION_KEY = 'passport_active_session';
+
+    function passDataUrlToBlob(dataUrl) {
+        if (!dataUrl || typeof dataUrl !== 'string') return null;
+        try {
+            const parts = dataUrl.split(',');
+            if (parts.length < 2) return null;
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+            const bstr = atob(parts[1]);
+            const u8 = new Uint8Array(bstr.length);
+            for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+            return new Blob([u8], { type: mime });
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function passBlobToDataUrl(blob) {
+        return new Promise((resolve) => {
+            if (!blob) return resolve(null);
+            try {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result || null);
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(blob);
+            } catch (_) {
+                resolve(null);
+            }
+        });
+    }
+
+    function passCanvasToBlob(canvas, mime, quality) {
+        return new Promise((resolve) => {
+            if (!canvas || typeof canvas.toBlob !== 'function') return resolve(null);
+            try {
+                canvas.toBlob((blob) => resolve(blob || null), mime || 'image/png', quality);
+            } catch (_) {
+                resolve(null);
+            }
+        });
+    }
+
+    function readPassportAdjustmentsState() {
+        return {
+            br: parseInt(document.getElementById('passBrSlider')?.value || 100, 10),
+            ct: parseInt(document.getElementById('passCtSlider')?.value || 100, 10),
+            gamma: parseFloat(document.getElementById('passGammaSlider')?.value || 1.0),
+            r: parseInt(document.getElementById('passRSlider')?.value || 0, 10),
+            g: parseInt(document.getElementById('passGSlider')?.value || 0, 10),
+            b: parseInt(document.getElementById('passBSlider')?.value || 0, 10)
+        };
+    }
+
+    function applyPassportAdjustmentsState(adj) {
+        const safe = adj || {};
+        const br = isFinite(safe.br) ? safe.br : 100;
+        const ct = isFinite(safe.ct) ? safe.ct : 100;
+        const gm = isFinite(safe.gamma) ? safe.gamma : 1.0;
+        const r = isFinite(safe.r) ? safe.r : 0;
+        const g = isFinite(safe.g) ? safe.g : 0;
+        const b = isFinite(safe.b) ? safe.b : 0;
+        const fmtSigned = (v) => (v > 0 ? '+' + v : String(v));
+
+        document.querySelectorAll('#passBrSlider').forEach(el => el.value = br);
+        document.querySelectorAll('#passCtSlider').forEach(el => el.value = ct);
+        document.querySelectorAll('#passGammaSlider').forEach(el => el.value = gm);
+        document.querySelectorAll('#passRSlider').forEach(el => el.value = r);
+        document.querySelectorAll('#passGSlider').forEach(el => el.value = g);
+        document.querySelectorAll('#passBSlider').forEach(el => el.value = b);
+
+        document.querySelectorAll('#passBrVal').forEach(el => el.textContent = br + '%');
+        document.querySelectorAll('#passCtVal').forEach(el => el.textContent = ct + '%');
+        document.querySelectorAll('#passGammaVal').forEach(el => el.textContent = Number(gm).toFixed(2));
+        document.querySelectorAll('#passRVal').forEach(el => el.textContent = fmtSigned(r));
+        document.querySelectorAll('#passGVal').forEach(el => el.textContent = fmtSigned(g));
+        document.querySelectorAll('#passBVal').forEach(el => el.textContent = fmtSigned(b));
+    }
+
+    async function clearSavedPassportSession() {
+        if (_passportSaveTimer) {
+            clearTimeout(_passportSaveTimer);
+            _passportSaveTimer = null;
+        }
+        try {
+            if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.deleteEditorData === 'function') {
+                await window.ImagePDFEditorDB.deleteEditorData(PASSPORT_SESSION_KEY);
+                return true;
+            }
+            return await new Promise((resolve) => {
+                const req = indexedDB.open('Monu_ImagePDFEditor_DB', 1);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('editorProjects')) {
+                        db.createObjectStore('editorProjects', { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('editorProjects')) return resolve(false);
+                    const tx = db.transaction('editorProjects', 'readwrite');
+                    tx.objectStore('editorProjects').delete(PASSPORT_SESSION_KEY);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => resolve(false);
+                };
+                req.onerror = () => resolve(false);
+            });
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async function readSavedPassportDb(key) {
+        if (window.ImagePDFEditorDB && typeof window.ImagePDFEditorDB.getEditorData === 'function') {
+            return window.ImagePDFEditorDB.getEditorData(key);
+        }
+        return new Promise((resolve) => {
+            try {
+                const req = indexedDB.open('Monu_ImagePDFEditor_DB', 1);
+                req.onsuccess = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('editorProjects')) return resolve(null);
+                    const tx = db.transaction('editorProjects', 'readonly');
+                    const getReq = tx.objectStore('editorProjects').get(key);
+                    getReq.onsuccess = () => resolve(getReq.result ? getReq.result.data : null);
+                    getReq.onerror = () => resolve(null);
+                };
+                req.onerror = () => resolve(null);
+            } catch (_) {
+                resolve(null);
+            }
+        });
+    }
+
+    async function savePassportSession() {
+        if (_restoringPassportSession) return;
+        if (!passImg) {
+            await clearSavedPassportSession();
+            return;
+        }
+        try {
+            const rawUrl = passOrigDataUrl || passImg.src;
+            const origBlob = passDataUrlToBlob(rawUrl);
+            const maskBlob = passSubjectMask ? await passCanvasToBlob(passSubjectMask, 'image/png') : null;
+            const customUnit = document.getElementById('passCustomUnit')?.value || prevCustomUnit || 'cm';
+            const customW = document.getElementById('passCustomW')?.value || '';
+            const customH = document.getElementById('passCustomH')?.value || '';
+
+            await writeCrossTransferDb(PASSPORT_SESSION_KEY, {
+                origBlob: origBlob || null,
+                origDataUrlFallback: origBlob ? null : rawUrl,
+                maskBlob: maskBlob || null,
+                bgColor: passBgColor,
+                sizeKey: passSizeKey,
+                physicalWmm: passPhysicalWmm,
+                physicalHmm: passPhysicalHmm,
+                sizeLabel: passSizeLabel,
+                customUnit,
+                customW,
+                customH,
+                activeTool: passActiveTool,
+                zoom: passZoom,
+                offsetX: passOffsetX,
+                offsetY: passOffsetY,
+                rotationDeg: passRotationDeg,
+                flipH: passFlipH,
+                dragLocked: passDragLocked,
+                paperSize: passPaperSize,
+                photoCount: passPhotoCount,
+                printPhotoGapMm: passPrintPhotoGapMm,
+                printPhotoBorderMm: passPrintPhotoBorderMm,
+                printCropGapMm: passPrintCropGapMm,
+                printCropLineEnabled: passPrintCropLineEnabled,
+                printCropLineType: passPrintCropLineType,
+                printScaleOffset: passPrintScaleOffset,
+                adjustments: readPassportAdjustmentsState(),
+                savedAt: Date.now()
+            });
+        } catch (err) {
+            console.warn('[Passport Maker] Session save warning:', err);
+        }
+    }
+
+    function schedulePassportSave(delay = 220) {
+        if (_restoringPassportSession) return;
+        clearTimeout(_passportSaveTimer);
+        _passportSaveTimer = setTimeout(() => {
+            _passportSaveTimer = null;
+            savePassportSession();
+        }, delay);
+    }
+
+    async function restorePassportSession() {
+        if (passImg) return false;
+        try {
+            const session = await readSavedPassportDb(PASSPORT_SESSION_KEY);
+            if (!session || (!session.origBlob && !session.origDataUrlFallback)) return false;
+
+            const dataUrl = session.origBlob
+                ? await passBlobToDataUrl(session.origBlob)
+                : session.origDataUrlFallback;
+            if (!dataUrl) return false;
+
+            let maskImg = null;
+            if (session.maskBlob) {
+                const maskUrl = await passBlobToDataUrl(session.maskBlob);
+                if (maskUrl) {
+                    maskImg = await new Promise((res) => {
+                        const mi = new Image();
+                        mi.onload = () => res(mi);
+                        mi.onerror = () => res(null);
+                        mi.src = maskUrl;
+                    });
+                }
+            }
+
+            const restoredImg = await new Promise((res) => {
+                const img = new Image();
+                img.onload = () => res(img);
+                img.onerror = () => res(null);
+                img.src = dataUrl;
+            });
+            if (!restoredImg) return false;
+
+            _restoringPassportSession = true;
+            passOrigDataUrl = dataUrl;
+            passImg = restoredImg;
+
+            if (maskImg) {
+                const mc = document.createElement('canvas');
+                mc.width = maskImg.naturalWidth || maskImg.width;
+                mc.height = maskImg.naturalHeight || maskImg.height;
+                mc.getContext('2d').drawImage(maskImg, 0, 0);
+                passSubjectMask = mc;
+            } else {
+                passSubjectMask = null;
+            }
+
+            passBgColor = session.bgColor || 'rgb(241, 245, 249)';
+            passSizeKey = session.sizeKey || '3.5x4.5';
+            passPhysicalWmm = isFinite(session.physicalWmm) ? session.physicalWmm : 35;
+            passPhysicalHmm = isFinite(session.physicalHmm) ? session.physicalHmm : 45;
+            passSizeLabel = session.sizeLabel || '3.5 × 4.5 cm';
+            passZoom = isFinite(session.zoom) ? session.zoom : 1.0;
+            passOffsetX = isFinite(session.offsetX) ? session.offsetX : 0;
+            passOffsetY = isFinite(session.offsetY) ? session.offsetY : 0;
+            passRotationDeg = isFinite(session.rotationDeg) ? session.rotationDeg : 0;
+            passFlipH = !!session.flipH;
+            passDragLocked = !!session.dragLocked;
+            passPaperSize = PAPER_SPECS[session.paperSize] ? session.paperSize : 'A4';
+            passPhotoCount = isFinite(session.photoCount) ? session.photoCount : 8;
+            passPrintPhotoGapMm = isFinite(session.printPhotoGapMm) ? session.printPhotoGapMm : 4.0;
+            passPrintPhotoBorderMm = isFinite(session.printPhotoBorderMm) ? session.printPhotoBorderMm : 0.3;
+            passPrintCropGapMm = isFinite(session.printCropGapMm) ? session.printCropGapMm : 0.0;
+            passPrintCropLineEnabled = session.printCropLineEnabled !== undefined ? !!session.printCropLineEnabled : true;
+            passPrintCropLineType = session.printCropLineType === 'solid' ? 'solid' : 'dashed';
+            passPrintScaleOffset = isFinite(session.printScaleOffset) ? session.printScaleOffset : 0;
+
+            document.querySelectorAll('#passportUploadZone').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('#passportSinglePreview').forEach(el => el.style.display = 'flex');
+
+            document.querySelectorAll('#passportSizeSelect').forEach(sel => sel.value = passSizeKey);
+            document.querySelectorAll('#passportSizePresets .ap-btn').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-size') === passSizeKey);
+            });
+            if (passSizeKey === 'custom') {
+                toggleCustomSizeBoxes(true);
+                prevCustomUnit = session.customUnit || 'cm';
+                document.querySelectorAll('#passCustomUnit').forEach(el => el.value = prevCustomUnit);
+                if (session.customW) document.querySelectorAll('#passCustomW').forEach(el => el.value = session.customW);
+                if (session.customH) document.querySelectorAll('#passCustomH').forEach(el => el.value = session.customH);
+            } else {
+                toggleCustomSizeBoxes(false);
+            }
+
+            document.querySelectorAll('#passportPaperSize').forEach(el => el.value = passPaperSize);
+            document.querySelectorAll('#passportSheetCount').forEach(el => el.value = passPhotoCount);
+            const modalGap = document.getElementById('passportModalPhotoGap');
+            if (modalGap) modalGap.value = passPrintPhotoGapMm;
+            const modalBorder = document.getElementById('passportModalPhotoBorder');
+            if (modalBorder) modalBorder.value = passPrintPhotoBorderMm;
+            const modalCropGap = document.getElementById('passportModalCropGap');
+            if (modalCropGap) modalCropGap.value = passPrintCropGapMm;
+            const modalCropEnable = document.getElementById('passportModalCropLineEnable');
+            if (modalCropEnable) modalCropEnable.checked = passPrintCropLineEnabled;
+            const modalCropType = document.getElementById('passportModalCropLineType');
+            if (modalCropType) {
+                modalCropType.value = passPrintCropLineType;
+                modalCropType.disabled = !passPrintCropLineEnabled;
+            }
+
+            syncFramingControls();
+            applyPassportAdjustmentsState(session.adjustments);
+            setPassportBgColor(passBgColor, null);
+            switchPassportTool(session.activeTool || 'sizecrop');
+            updateHeaderActionsVisibility();
+            updatePassportInfoCluster();
+            renderPassportCanvas();
+            setPassportStatus('Previous passport photo session restored cleanly from browser storage.', 'ok');
+            _restoringPassportSession = false;
+            return true;
+        } catch (err) {
+            _restoringPassportSession = false;
+            console.warn('[Passport Maker] Session restore warning:', err);
+            return false;
+        }
+    }
 
     const PASSPORT_TOOLS_META = {
         sizecrop: { title: 'Photo Size & Crop' },
@@ -260,6 +570,9 @@
         document.querySelectorAll('#pp-' + toolId).forEach(el => {
             el.style.display = 'block';
         });
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(150);
+        }
     }
 
     /**
@@ -285,6 +598,7 @@
         if (!dataUrl) return;
         const img = new Image();
         img.onload = function () {
+            passOrigDataUrl = dataUrl;
             passImg = img;
             passSubjectMask = null;
             passRotationDeg = 0;
@@ -301,6 +615,7 @@
             updateHeaderActionsVisibility();
             updatePassportInfoCluster();
             renderPassportCanvas();
+            schedulePassportSave(80);
             if (sourceLabel && sourceLabel !== 'device') {
                 showPassportToast(`Loaded photo from ${sourceLabel}! Drag to position or crop.`);
             } else {
@@ -438,6 +753,7 @@
         }
         syncFramingControls();
         renderPassportCanvas();
+        if (passImg) schedulePassportSave(180);
     }
 
     function togglePassportDragLock(locked) {
@@ -450,6 +766,7 @@
                     : 'Image drag unlocked — drag canvas to reposition.',
                 'info'
             );
+            schedulePassportSave(150);
         }
     }
 
@@ -460,6 +777,7 @@
         }
         passRotationDeg = ((passRotationDeg + deltaDeg) % 360 + 360) % 360;
         renderPassportCanvas();
+        schedulePassportSave(150);
         setPassportStatus(`Rotated portrait (${passRotationDeg}°).`, 'info');
     }
 
@@ -470,6 +788,7 @@
         }
         passFlipH = !passFlipH;
         renderPassportCanvas();
+        schedulePassportSave(150);
         setPassportStatus('Flipped portrait horizontally.', 'info');
     }
 
@@ -481,7 +800,10 @@
         passFlipH = false;
         syncFramingControls();
         renderPassportCanvas();
-        if (passImg) setPassportStatus('Crop zoom and position reset to center.', 'ok');
+        if (passImg) {
+            schedulePassportSave(150);
+            setPassportStatus('Crop zoom and position reset to center.', 'ok');
+        }
     }
 
     function normalizeColorToHex(col) {
@@ -523,7 +845,8 @@
         });
 
         renderPassportCanvas();
-        if (passImg) {
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(150);
             setPassportStatus('Background color updated.', 'ok');
         }
     }
@@ -533,6 +856,7 @@
         passSubjectMask = null;
         updateHeaderActionsVisibility();
         renderPassportCanvas();
+        schedulePassportSave(150);
         showPassportToast('Original background restored.');
     }
 
@@ -589,6 +913,9 @@
         updatePassportInfoCluster();
         renderPassportCanvas();
         refreshOpenPrintModalIfActive();
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(150);
+        }
     }
 
     function updatePassportSize() {
@@ -650,6 +977,9 @@
         updatePassportInfoCluster();
         renderPassportCanvas();
         refreshOpenPrintModalIfActive();
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(180);
+        }
         setPassportStatus(`Custom print size: ${passSizeLabel} (${wMm.toFixed(1)} × ${hMm.toFixed(1)} mm)`, 'ok');
     }
 
@@ -673,11 +1003,15 @@
         document.querySelectorAll('#passBVal').forEach(el => el.textContent = fmtSigned(b));
 
         renderPassportCanvas();
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(180);
+        }
     }
 
     function resetPassportSlidersOnly() {
         syncAdjustmentSliders();
         renderPassportCanvas();
+        if (passImg) schedulePassportSave(150);
         showPassportToast('Color & tone sliders reset.');
     }
 
@@ -994,6 +1328,7 @@
             setPassportProgress(100);
             updateHeaderActionsVisibility();
             renderPassportCanvas();
+            schedulePassportSave(100);
             showPassportToast('Background removed! Choose your desired background color.');
         } catch (err) {
             console.warn('[Passport Maker] Segmentation fallback error:', err);
@@ -1212,6 +1547,9 @@
         document.querySelectorAll('#passportPaperSize').forEach(el => el.value = passPaperSize);
         document.querySelectorAll('#passportSheetCount').forEach(el => el.value = passPhotoCount);
         refreshOpenPrintModalIfActive();
+        if (!_restoringPassportSession && passImg) {
+            schedulePassportSave(180);
+        }
     }
 
     function computeSheetLayout(paperKey, requestedCount) {
@@ -1451,6 +1789,7 @@
             inputEl.value = passPrintScaleOffset;
         }
         renderPassportPrintTargets();
+        if (!_restoringPassportSession && passImg) schedulePassportSave(180);
     }
 
     function onPassportModalPhotoScaleInput(val) {
@@ -1466,6 +1805,7 @@
             inputEl.value = passPrintScaleOffset;
         }
         renderPassportPrintTargets();
+        if (!_restoringPassportSession && passImg) schedulePassportSave(180);
     }
 
     function refreshOpenPrintModalIfActive() {
@@ -1491,6 +1831,7 @@
         }
         syncModalSpacingState();
         renderPassportPrintTargets();
+        if (!_restoringPassportSession && passImg) schedulePassportSave(180);
     }
 
     /**
@@ -1834,7 +2175,9 @@
         const dataUrl = photoCanvas.toDataURL('image/jpeg', 0.98);
         const tool = targetTool || 'compress';
         const isPdfTarget = (tool === 'img2pdf' || tool === 'pdfcompress');
-        const targetRoute = isPdfTarget ? ('/document-studio?tool=' + tool) : '/image-pdf-editor';
+        const targetRoute = tool === 'img2pdf'
+            ? '/image-to-pdf'
+            : (tool === 'pdfcompress' ? '/pdf-compress' : '/image-compress');
         const payload = {
             source: 'Passport Photo Maker',
             targetTool: tool,
@@ -1851,7 +2194,7 @@
                     window.switchMode('DOC');
                 }
                 if (typeof window.switchDocStudioTool === 'function') {
-                    window.switchDocStudioTool(tool);
+                    window.switchDocStudioTool(tool, null, true);
                 }
                 await window.receiveCrossStudioTransfer(payload);
                 return;
@@ -1860,7 +2203,7 @@
             const hasSpaEditor = !!document.getElementById('page-editor-studio') && typeof window.receiveCrossStudioTransfer === 'function';
             if (hasSpaEditor) {
                 if (window.MonuRouter && window.MonuRouter.navigateTo) {
-                    window.MonuRouter.navigateTo('/image-pdf-editor');
+                    window.MonuRouter.navigateTo('/image-compress');
                 }
                 await window.receiveCrossStudioTransfer(payload);
                 return;
@@ -1993,11 +2336,13 @@
         setPassportBgColor('rgb(241, 245, 249)', null);
         updateHeaderActionsVisibility();
         renderPassportCanvas();
+        schedulePassportSave(150);
         showPassportToast('Photo framing, background & adjustments reset.');
     }
 
     function resetPassportMaker() {
         passImg = null;
+        passOrigDataUrl = null;
         passSubjectMask = null;
         passBgColor = 'rgb(241, 245, 249)';
         passZoom = 1.0;
@@ -2010,6 +2355,7 @@
         syncFramingControls();
         syncAdjustmentSliders();
         updateHeaderActionsVisibility();
+        clearSavedPassportSession();
 
         document.querySelectorAll('#passportUploadZone').forEach(el => el.style.display = 'flex');
         document.querySelectorAll('#passportSinglePreview').forEach(el => el.style.display = 'none');
@@ -2059,10 +2405,12 @@
     window.resetPassportMaker = resetPassportMaker;
     window.hasPassportWork = function() { return !!passImg; };
     window.clearPassportWork = resetPassportMaker;
+    window.clearSavedPassportSession = clearSavedPassportSession;
+    window.savePassportSession = savePassportSession;
     window.renderPassportCanvas = renderPassportCanvas;
 
     // Initialize drag-and-drop upload, canvas pointer pan & static preview resize handling
-    function setupPassportEvents() {
+    async function setupPassportEvents() {
         const dropTargets = document.querySelectorAll('#passportUploadZone, #passportPreviewPane');
         dropTargets.forEach(zone => {
             zone.addEventListener('dragover', (e) => {
@@ -2122,6 +2470,7 @@
                 if (!dragging) return;
                 dragging = false;
                 canvas.style.cursor = passDragLocked ? 'not-allowed' : 'grab';
+                if (passImg) schedulePassportSave(180);
             };
             canvas.addEventListener('pointerup', endDrag);
             canvas.addEventListener('pointercancel', endDrag);
@@ -2129,6 +2478,20 @@
 
         window.addEventListener('resize', () => {
             if (passImg) applyStaticPreviewDisplaySize();
+        });
+
+        window.addEventListener('pagehide', () => {
+            if (passImg) {
+                clearTimeout(_passportSaveTimer);
+                savePassportSession();
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && passImg) {
+                clearTimeout(_passportSaveTimer);
+                savePassportSession();
+            }
         });
 
         document.addEventListener('keydown', (e) => {
@@ -2139,7 +2502,10 @@
 
         updatePassportInfoCluster();
         syncFramingControls();
-        checkPendingPassportTransfer();
+        await checkPendingPassportTransfer();
+        if (!passImg) {
+            await restorePassportSession();
+        }
     }
 
     if (document.readyState === 'loading') {

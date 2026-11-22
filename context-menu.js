@@ -113,21 +113,23 @@
         const visiblePage = document.querySelector('.page-view:not(.hidden)');
         const pageId = visiblePage ? visiblePage.id : '';
 
-        if (path === '/document-studio' || pageId === 'page-doc-studio') {
-            const sub = window._docStudioActiveSubTool || 'scanner';
+        if (['/document-enhance', '/image-to-pdf', '/pdf-compress', '/document-studio'].includes(path) || pageId === 'page-doc-studio') {
+            let sub = window._docStudioActiveSubTool || 'scanner';
+            if (path === '/image-to-pdf') sub = 'img2pdf';
+            else if (path === '/pdf-compress') sub = 'pdfcompress';
             if (sub === 'img2pdf') {
                 return { kind: 'doc-img2pdf', label: 'Images to PDF', tutorialId: 'doc-tutorial' };
             }
             if (sub === 'pdfcompress') {
                 return { kind: 'doc-pdfcompress', label: 'PDF Optimizer', tutorialId: 'doc-tutorial' };
             }
-            return { kind: 'doc-scanner', label: 'Document Scanner', tutorialId: 'doc-tutorial' };
+            return { kind: 'doc-scanner', label: 'Document Enhancer', tutorialId: 'doc-tutorial' };
         }
-        if (path === '/id-card-studio' || pageId === 'page-id-studio') {
+        if (['/id-card-print', '/id-card-studio'].includes(path) || pageId === 'page-id-studio') {
             return { kind: 'id-studio', label: 'ID Card Studio', tutorialId: 'id-tutorial' };
         }
-        if (path === '/image-pdf-editor' || pageId === 'page-editor-studio') {
-            const label = window.TOOL === 'pdfwatermark' ? 'PDF Watermark' : 'Image Editor';
+        if (['/image-compress', '/photo-resize', '/image-crop', '/image-convert', '/image-adjust', '/pdf-watermark', '/image-pdf-editor'].includes(path) || pageId === 'page-editor-studio') {
+            const label = (path === '/pdf-watermark' || window.TOOL === 'pdfwatermark') ? 'PDF Watermark' : 'Image Editor';
             return { kind: 'image-editor', label, tutorialId: 'editor-tutorial' };
         }
         if (path === '/passport-photo-maker' || pageId === 'page-passport-maker') {
@@ -176,7 +178,7 @@
         if (!info || info.kind === 'static') return;
         if (info.kind === 'doc-scanner' && typeof window.resetActiveDocOrIdTool === 'function') {
             window.resetActiveDocOrIdTool('DOC');
-            showToast('Document Scanner reset to initial settings.');
+            showToast('Document Enhancer reset to initial settings.');
         } else if (info.kind === 'id-studio' && typeof window.resetActiveDocOrIdTool === 'function') {
             window.resetActiveDocOrIdTool('ID');
             showToast('ID Card Studio reset to initial settings.');
@@ -204,7 +206,7 @@
         if (!info || info.kind === 'static') return;
         if (info.kind === 'doc-scanner' && typeof window.clearActiveDocOrIdWork === 'function') {
             window.clearActiveDocOrIdWork('DOC');
-            showToast('Document Scanner workspace cleared.');
+            showToast('Document Enhancer workspace cleared.');
         } else if (info.kind === 'id-studio' && typeof window.clearActiveDocOrIdWork === 'function') {
             window.clearActiveDocOrIdWork('ID');
             showToast('ID Card Studio workspace cleared.');
