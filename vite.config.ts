@@ -253,7 +253,7 @@ function smartvleStaticRoutesPlugin(): Plugin {
   return {
     name: 'smartvle-static-routes-generator',
     configurePreviewServer(server) {
-      const distDir = path.resolve(__dirname, 'dist');
+      const docsDir = path.resolve(__dirname, 'docs');
       server.middlewares.use((req, res, next) => {
         if (!req.url || (req.method !== 'GET' && req.method !== 'HEAD')) {
           return next();
@@ -265,7 +265,7 @@ function smartvleStaticRoutesPlugin(): Plugin {
         }
 
         if (pathname === '/' || pathname === '/index.html') {
-          const idxFile = path.join(distDir, 'index.html');
+          const idxFile = path.join(docsDir, 'index.html');
           if (fs.existsSync(idxFile)) {
             res.statusCode = 200;
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -277,7 +277,7 @@ function smartvleStaticRoutesPlugin(): Plugin {
 
         if (knownSlugSet.has(pathname)) {
           const slug = pathname.replace(/^\/+/, '');
-          const routeFile = path.join(distDir, slug, 'index.html');
+          const routeFile = path.join(docsDir, slug, 'index.html');
           if (fs.existsSync(routeFile)) {
             res.statusCode = 200;
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -286,12 +286,12 @@ function smartvleStaticRoutesPlugin(): Plugin {
           }
         }
 
-        const candidateFile = path.join(distDir, pathname.replace(/^\/+/, ''));
+        const candidateFile = path.join(docsDir, pathname.replace(/^\/+/, ''));
         if (fs.existsSync(candidateFile) && fs.statSync(candidateFile).isFile()) {
           return next();
         }
 
-        const notFoundFile = path.join(distDir, '404.html');
+        const notFoundFile = path.join(docsDir, '404.html');
         res.statusCode = 404;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         if (fs.existsSync(notFoundFile)) {
@@ -302,8 +302,8 @@ function smartvleStaticRoutesPlugin(): Plugin {
       });
     },
     closeBundle() {
-      const distDir = path.resolve(__dirname, 'dist');
-      const baseHtmlPath = path.join(distDir, 'index.html');
+      const docsDir = path.resolve(__dirname, 'docs');
+      const baseHtmlPath = path.join(docsDir, 'index.html');
       if (!fs.existsSync(baseHtmlPath)) return;
 
       const baseHtml = fs.readFileSync(baseHtmlPath, 'utf-8');
@@ -413,10 +413,10 @@ function smartvleStaticRoutesPlugin(): Plugin {
         }
 
         const cleanSlug = route.slug.replace(/^\/+/, '');
-        const routeDir = path.join(distDir, cleanSlug);
+        const routeDir = path.join(docsDir, cleanSlug);
         fs.mkdirSync(routeDir, { recursive: true });
         fs.writeFileSync(path.join(routeDir, 'index.html'), html, 'utf-8');
-        fs.writeFileSync(path.join(distDir, `${cleanSlug}.html`), html, 'utf-8');
+        fs.writeFileSync(path.join(docsDir, `${cleanSlug}.html`), html, 'utf-8');
       }
 
       const knownPathsJson = JSON.stringify(STATIC_ROUTE_META.map(r => r.slug));
@@ -464,15 +464,18 @@ function smartvleStaticRoutesPlugin(): Plugin {
 </body>
 </html>
 `;
-      fs.writeFileSync(path.join(distDir, '404.html'), notFoundHtml, 'utf-8');
+      fs.writeFileSync(path.join(docsDir, '404.html'), notFoundHtml, 'utf-8');
 
-      // Ensure .nojekyll exists in dist for GitHub Pages compatibility
-      fs.writeFileSync(path.join(distDir, '.nojekyll'), '', 'utf-8');
+      // Ensure .nojekyll exists in docs/ for GitHub Pages compatibility
+      fs.writeFileSync(path.join(docsDir, '.nojekyll'), '', 'utf-8');
 
-      // Copy CNAME for GitHub Pages custom domain
+      // Ensure CNAME exists in docs/ for custom domain smartvletool.in
       const cnameSrc = path.resolve(__dirname, 'CNAME');
+      const docsCnamePath = path.join(docsDir, 'CNAME');
       if (fs.existsSync(cnameSrc)) {
-        fs.copyFileSync(cnameSrc, path.join(distDir, 'CNAME'));
+        fs.copyFileSync(cnameSrc, docsCnamePath);
+      } else {
+        fs.writeFileSync(docsCnamePath, 'smartvletool.in\n', 'utf-8');
       }
     },
   };
@@ -480,6 +483,7 @@ function smartvleStaticRoutesPlugin(): Plugin {
 
 export default defineConfig(() => {
   return {
+    base: '/',
     plugins: [
       react(),
       tailwindcss(),
@@ -624,6 +628,8 @@ export default defineConfig(() => {
       },
     },
     build: {
+      outDir: 'docs',
+      emptyOutDir: true,
       sourcemap: false,
       minify: true,
       esbuild: {

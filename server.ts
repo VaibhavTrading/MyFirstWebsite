@@ -28,9 +28,10 @@ async function startServer() {
   app.get(['/mediapipe/wasm/:filename', '/mediapipe/models/:filename'], (req, res) => {
     const subDir = req.path.includes('/wasm/') ? 'wasm' : 'models';
     const filename = path.basename(req.params.filename);
+    const docsFile = path.resolve(__dirname, 'docs/mediapipe', subDir, filename);
     const distFile = path.resolve(__dirname, 'dist/mediapipe', subDir, filename);
     const publicFile = path.resolve(__dirname, 'public/mediapipe', subDir, filename);
-    const targetPath = fs.existsSync(distFile) ? distFile : (fs.existsSync(publicFile) ? publicFile : null);
+    const targetPath = fs.existsSync(docsFile) ? docsFile : (fs.existsSync(distFile) ? distFile : (fs.existsSync(publicFile) ? publicFile : null));
     if (targetPath) {
       const ext = path.extname(filename).toLowerCase();
       const mimeType = ext === '.wasm'
@@ -70,10 +71,12 @@ async function startServer() {
     '/og-preview.jpg'
   ], (req, res) => {
     const filename = path.basename(req.path);
+    const docsFavicon = path.resolve(__dirname, 'docs', filename);
     const distFavicon = path.resolve(__dirname, 'dist', filename);
     const publicFavicon = path.resolve(__dirname, 'public', filename);
     const rootFavicon = path.resolve(__dirname, filename);
-    const targetPath = fs.existsSync(distFavicon) ? distFavicon :
+    const targetPath = fs.existsSync(docsFavicon) ? docsFavicon :
+                       fs.existsSync(distFavicon) ? distFavicon :
                        fs.existsSync(publicFavicon) ? publicFavicon :
                        fs.existsSync(rootFavicon) ? rootFavicon : null;
     if (targetPath) {
@@ -88,6 +91,12 @@ async function startServer() {
 
   // Explicit route for sw.js to prevent redirect issues
   app.get('/sw.js', (req, res) => {
+    const docsSwPath = path.resolve(__dirname, 'docs/sw.js');
+    if (fs.existsSync(docsSwPath)) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Service-Worker-Allowed', '/');
+      return res.sendFile(docsSwPath);
+    }
     const swPath = path.resolve(__dirname, 'dist/sw.js');
     if (fs.existsSync(swPath)) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
@@ -106,10 +115,12 @@ async function startServer() {
   // Explicit route for workbox files
   app.get('/workbox-*.js', (req, res) => {
     const fileName = path.basename(req.path);
+    const docsWbPath = path.resolve(__dirname, 'docs', fileName);
     const wbPath = path.resolve(__dirname, 'dist', fileName);
-    if (fs.existsSync(wbPath)) {
+    const target = fs.existsSync(docsWbPath) ? docsWbPath : wbPath;
+    if (fs.existsSync(target)) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      return res.sendFile(wbPath);
+      return res.sendFile(target);
     }
     res.status(404).send('Workbox script not found');
   });
@@ -117,11 +128,13 @@ async function startServer() {
   // Explicit route for social preview banner assets (WhatsApp, Facebook, Twitter)
   app.get(['/assets/aistudio/:filename', '/public/assets/aistudio/:filename'], (req, res) => {
     const filename = req.params.filename;
+    const docsAssetPath = path.resolve(__dirname, 'docs/assets/aistudio', filename);
     const publicAssetPath = path.resolve(__dirname, 'public/assets/aistudio', filename);
     const rootAssetPath = path.resolve(__dirname, 'assets/aistudio', filename);
     const distAssetPath = path.resolve(__dirname, 'dist/assets/aistudio', filename);
 
-    const targetPath = fs.existsSync(publicAssetPath) ? publicAssetPath :
+    const targetPath = fs.existsSync(docsAssetPath) ? docsAssetPath :
+                       fs.existsSync(publicAssetPath) ? publicAssetPath :
                        fs.existsSync(rootAssetPath) ? rootAssetPath :
                        fs.existsSync(distAssetPath) ? distAssetPath : null;
 
@@ -143,9 +156,11 @@ async function startServer() {
   // Explicit route for tutorial videos & posters (supports HTTP Range 206 streaming & proper 404)
   app.get('/videos/:filename', (req, res) => {
     const filename = path.basename(req.params.filename);
+    const docsVideoPath = path.resolve(__dirname, 'docs/videos', filename);
     const distVideoPath = path.resolve(__dirname, 'dist/videos', filename);
     const publicVideoPath = path.resolve(__dirname, 'public/videos', filename);
-    const targetPath = fs.existsSync(distVideoPath) ? distVideoPath :
+    const targetPath = fs.existsSync(docsVideoPath) ? docsVideoPath :
+                       fs.existsSync(distVideoPath) ? distVideoPath :
                        fs.existsSync(publicVideoPath) ? publicVideoPath : null;
 
     if (targetPath) {
@@ -154,7 +169,14 @@ async function startServer() {
     res.status(404).send('Tutorial video not found');
   });
 
-  // Serve static assets from built dist if present
+  // Serve static assets from built docs (or dist fallback) if present
+  const docsPath = path.resolve(__dirname, 'docs');
+  if (fs.existsSync(docsPath)) {
+    app.use(express.static(docsPath, {
+      index: false,
+      redirect: false
+    }));
+  }
   const distPath = path.resolve(__dirname, 'dist');
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath, {
@@ -199,9 +221,10 @@ async function startServer() {
   ];
 
   app.get(['/', '/index.html'], (req, res) => {
+    const docsIndex = path.resolve(__dirname, 'docs/index.html');
     const distIndex = path.resolve(__dirname, 'dist/index.html');
     const rootIndex = path.resolve(__dirname, 'index.html');
-    const target = fs.existsSync(distIndex) ? distIndex : rootIndex;
+    const target = fs.existsSync(docsIndex) ? docsIndex : (fs.existsSync(distIndex) ? distIndex : rootIndex);
     if (fs.existsSync(target)) {
       return res.sendFile(target);
     }
@@ -210,14 +233,20 @@ async function startServer() {
 
   app.get(CLEAN_HTML_ROUTES, (req, res) => {
     const cleanSlug = req.path.replace(/^\/+|\/+$/g, '');
+    const docsRouteFile = path.resolve(__dirname, 'docs', cleanSlug, 'index.html');
+    const docsIndex = path.resolve(__dirname, 'docs/index.html');
     const distRouteFile = path.resolve(__dirname, 'dist', cleanSlug, 'index.html');
     const distIndex = path.resolve(__dirname, 'dist/index.html');
     const rootIndex = path.resolve(__dirname, 'index.html');
-    const target = fs.existsSync(distRouteFile)
-      ? distRouteFile
-      : fs.existsSync(distIndex)
-        ? distIndex
-        : rootIndex;
+    const target = fs.existsSync(docsRouteFile)
+      ? docsRouteFile
+      : fs.existsSync(distRouteFile)
+        ? distRouteFile
+        : fs.existsSync(docsIndex)
+          ? docsIndex
+          : fs.existsSync(distIndex)
+            ? distIndex
+            : rootIndex;
     if (fs.existsSync(target)) {
       return res.sendFile(target);
     }
@@ -226,6 +255,10 @@ async function startServer() {
 
   // Fallback 404 handler for unknown URLs
   app.get('*', (req, res) => {
+    const docs404 = path.resolve(__dirname, 'docs/404.html');
+    if (fs.existsSync(docs404)) {
+      return res.status(404).sendFile(docs404);
+    }
     const dist404 = path.resolve(__dirname, 'dist/404.html');
     if (fs.existsSync(dist404)) {
       return res.status(404).sendFile(dist404);
