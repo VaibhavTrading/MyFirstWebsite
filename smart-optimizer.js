@@ -1015,6 +1015,13 @@
          * 4. OPTIMIZE PDF SEQUENCE
          * Shared engine for PDF compilation and target-size optimization
          * Used by both "Image to PDF" and "PDF Optimizer".
+         *
+         * Applies the same proportional mipmap downscaling and Quality-Protected
+         * Two-Stage Optimization formula used by the Image Editor Compress Tool:
+         * - Zero aspect-ratio distortion (proportional dimension capping + actual jsPDF page fitting)
+         * - Stage A: 100% resolution binary search in safe quality range [68..95]
+         * - Stage B: Proportional resolution scaling while keeping crisp quality [72..95] + Q>=80 polish
+         * - Stage C1/C2: Graceful fallbacks only for extreme tight KB targets
          */
         async optimizePdfSequence(pages, options = {}, onProgress = null) {
             if (!pages || !pages.length) throw new Error('No pages provided for PDF optimization.');
@@ -1025,7 +1032,7 @@
             const { jsPDF } = window.jspdf;
             const totalPages = pages.length;
             const targetKB = parseFloat(options.targetKB) || 0;
-            const targetBytes = targetKB > 0 ? (targetKB * 1024) : 0;
+            const targetBytes = targetKB > 0 ? Math.round(targetKB * 1024) : 0;
             const baseDpi = options.baseDpi || 150;
             const isCompress = options.isCompress !== false;
             const baseQuality = options.baseQuality || (isCompress ? 0.80 : 0.95);
@@ -1035,390 +1042,531 @@
             const showPageNum = !!options.showPageNum;
             const isDocument = options.isDocument !== false;
 
-            // Safe Quality Floor for PDF embedded images
-            // Prevents PDF Optimizer or Image-to-PDF from degrading down to 0.05
             const pdfQualityFloor = isDocument ? 0.60 : 0.45;
-
             const pageDimMap = { a4: [210, 297], a3: [297, 420], letter: [216, 279], fit: null };
             const baseDim = pageDimMap[pageSize];
+            const MAX_PAGE_PIXEL_DIM = 3600;
 
-            // Render single candidate PDF pass from PRISTINE sources
-            async function buildCandidatePdf(quality, scaleFactor = 1.0, extraPadBytes = 0) {
-                const effectiveDpi = baseDpi * scaleFactor;
-                const scale = effectiveDpi / 72;
-                let pdf = null;
+            const createCanvasCompat = (w, h) => {
+                const c = document.createElement('canvas');
+                c.width = Math.max(1, Math.round(w));
+                c.height = Math.max(1, Math.round(h));
+                return c;
+            };
 
+            // Progressive 0.5x mipmap downscaler matching Image Editor Compress Tool
+            const renderMipmapToJpeg = async (srcCanvas, scale, qualityInt) => {
+                const srcW = srcCanvas.width || 1;
+                const srcH = srcCanvas.height || 1;
+                const safeScale = Math.max(0.01, Math.min(2.5, scale));
+                const targetW = Math.max(1, Math.round(srcW * safeScale));
+                const targetH = Math.max(1, Math.round(srcH * safeScale));
+
+                let curDrawable = srcCanvas;
+                let curW = srcW;
+                let curH = srcH;
+                const tempSteps = [];
+
+                while (curW * 0.5 > targetW && curH * 0.5 > targetH) {
+                    const nextW = Math.max(targetW, Math.round(curW * 0.5));
+                    const nextH = Math.max(targetH, Math.round(curH * 0.5));
+                    const stepCanvas = createCanvasCompat(nextW, nextH);
+                    const stepCtx = stepCanvas.getContext('2d');
+                    if (!stepCtx) break;
+                    stepCtx.fillStyle = '#FFFFFF';
+                    stepCtx.fillRect(0, 0, nextW, nextH);
+                    stepCtx.imageSmoothingEnabled = true;
+                    stepCtx.imageSmoothingQuality = 'high';
+                    stepCtx.drawImage(curDrawable, 0, 0, curW, curH, 0, 0, nextW, nextH);
+                    tempSteps.push(stepCanvas);
+                    curDrawable = stepCanvas;
+                    curW = nextW;
+                    curH = nextH;
+                }
+
+                const outCanvas = createCanvasCompat(targetW, targetH);
+                const outCtx = outCanvas.getContext('2d');
+                outCtx.fillStyle = '#FFFFFF';
+                outCtx.fillRect(0, 0, targetW, targetH);
+                outCtx.imageSmoothingEnabled = true;
+                outCtx.imageSmoothingQuality = 'high';
+                outCtx.drawImage(curDrawable, 0, 0, curW, curH, 0, 0, targetW, targetH);
+
+                for (const tc of tempSteps) {
+                    tc.width = 1;
+                    tc.height = 1;
+                }
+
+                const clampedQ = Math.min(1.0, Math.max(0.01, qualityInt / 100.0));
+                const blob = await canvasToBlobAsync(outCanvas, 'image/jpeg', clampedQ);
+                outCanvas.width = 1;
+                outCanvas.height = 1;
+
+                return {
+                    blob,
+                    byteLength: blob.size,
+                    width: targetW,
+                    height: targetH,
+                    scale: safeScale,
+                    qualityInt,
+                    qualityFloat: clampedQ
+                };
+            };
+
+            // Step 1: Prepare pristine, un-distorted source canvas per page (rendered ONCE)
+            const preparedPages = [];
+            try {
                 for (let i = 0; i < totalPages; i++) {
                     const item = pages[i];
                     const pgNum = i + 1;
-
                     if (onProgress) {
                         onProgress({
                             pageIndex: i,
                             totalPages,
-                            percent: Math.round(((pgNum - 0.5) / totalPages) * 100),
-                            status: `Processing page ${pgNum}/${totalPages}…`
+                            percent: Math.round((pgNum / totalPages) * 28),
+                            status: `Preparing pristine page ${pgNum}/${totalPages}…`
                         });
                     }
 
-                    // 1. Render raw canvas from pristine source
-                    let rawCanvas = document.createElement('canvas');
+                    let rawCanvas;
                     if (item.type === 'pdf' && item.pdfDoc && item.pdfPageNum) {
                         const page = await item.pdfDoc.getPage(item.pdfPageNum);
-                        const vp = page.getViewport({ scale });
-                        rawCanvas.width = Math.max(1, Math.round(vp.width));
-                        rawCanvas.height = Math.max(1, Math.round(vp.height));
+                        const renderScale = baseDpi / 72;
+                        const vp = page.getViewport({ scale: renderScale });
+                        const maxSide = Math.max(vp.width, vp.height, 1);
+                        const cap = maxSide > MAX_PAGE_PIXEL_DIM ? (MAX_PAGE_PIXEL_DIM / maxSide) : 1;
+                        const finalVp = cap < 1 ? page.getViewport({ scale: renderScale * cap }) : vp;
+
+                        rawCanvas = createCanvasCompat(finalVp.width, finalVp.height);
                         const ctx = rawCanvas.getContext('2d');
-                        ctx.fillStyle = '#ffffff';
+                        ctx.fillStyle = '#FFFFFF';
                         ctx.fillRect(0, 0, rawCanvas.width, rawCanvas.height);
-                        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+                        await page.render({ canvasContext: ctx, viewport: finalVp }).promise;
                     } else {
-                        // Image page from pristine imgElement (apply scaleFactor cleanly)
                         const im = item.imgElement;
                         const natW = im.naturalWidth || im.width || 1;
                         const natH = im.naturalHeight || im.height || 1;
-                        const imgScale = Math.max(0.1, Math.min(2.5, scaleFactor));
-                        const targetW = Math.max(1, Math.min(2500, Math.round(natW * imgScale)));
-                        const targetH = Math.max(1, Math.min(2500, Math.round(natH * imgScale)));
-                        rawCanvas.width = targetW;
-                        rawCanvas.height = targetH;
+                        const maxSide = Math.max(natW, natH, 1);
+                        const cap = maxSide > MAX_PAGE_PIXEL_DIM ? (MAX_PAGE_PIXEL_DIM / maxSide) : 1;
+                        const targetW = Math.max(1, Math.round(natW * cap));
+                        const targetH = Math.max(1, Math.round(natH * cap));
+
+                        let curDrawable = im;
+                        let curW = natW;
+                        let curH = natH;
+                        const tempSteps = [];
+                        while (curW * 0.5 > targetW && curH * 0.5 > targetH) {
+                            const nextW = Math.max(targetW, Math.round(curW * 0.5));
+                            const nextH = Math.max(targetH, Math.round(curH * 0.5));
+                            const sc = createCanvasCompat(nextW, nextH);
+                            const sctx = sc.getContext('2d');
+                            sctx.fillStyle = '#FFFFFF';
+                            sctx.fillRect(0, 0, nextW, nextH);
+                            sctx.imageSmoothingEnabled = true;
+                            sctx.imageSmoothingQuality = 'high';
+                            sctx.drawImage(curDrawable, 0, 0, curW, curH, 0, 0, nextW, nextH);
+                            tempSteps.push(sc);
+                            curDrawable = sc;
+                            curW = nextW;
+                            curH = nextH;
+                        }
+
+                        rawCanvas = createCanvasCompat(targetW, targetH);
                         const ctx = rawCanvas.getContext('2d');
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, rawCanvas.width, rawCanvas.height);
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, targetW, targetH);
                         ctx.imageSmoothingEnabled = true;
                         ctx.imageSmoothingQuality = 'high';
-                        ctx.drawImage(im, 0, 0, rawCanvas.width, rawCanvas.height);
+                        ctx.drawImage(curDrawable, 0, 0, curW, curH, 0, 0, targetW, targetH);
+
+                        for (const tc of tempSteps) {
+                            tc.width = 1;
+                            tc.height = 1;
+                        }
                     }
 
-                    // 2. Handle Rotation
-                    let finalCanvas = rawCanvas;
-                    const rot = (item.rotation || 0) % 360;
+                    // Apply rotation preserving exact aspect ratio
+                    let pristineCanvas = rawCanvas;
+                    const rot = ((item.rotation || 0) % 360 + 360) % 360;
                     if (rot !== 0) {
-                        finalCanvas = document.createElement('canvas');
-                        if (rot === 90 || rot === 270) {
-                            finalCanvas.width = rawCanvas.height;
-                            finalCanvas.height = rawCanvas.width;
-                        } else {
-                            finalCanvas.width = rawCanvas.width;
-                            finalCanvas.height = rawCanvas.height;
-                        }
-                        const rctx = finalCanvas.getContext('2d');
-                        rctx.fillStyle = '#ffffff';
-                        rctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-                        rctx.translate(finalCanvas.width / 2, finalCanvas.height / 2);
+                        pristineCanvas = createCanvasCompat(
+                            (rot === 90 || rot === 270) ? rawCanvas.height : rawCanvas.width,
+                            (rot === 90 || rot === 270) ? rawCanvas.width : rawCanvas.height
+                        );
+                        const rctx = pristineCanvas.getContext('2d');
+                        rctx.fillStyle = '#FFFFFF';
+                        rctx.fillRect(0, 0, pristineCanvas.width, pristineCanvas.height);
+                        rctx.translate(pristineCanvas.width / 2, pristineCanvas.height / 2);
                         rctx.rotate((rot * Math.PI) / 180);
                         rctx.drawImage(rawCanvas, -rawCanvas.width / 2, -rawCanvas.height / 2);
-                        // Release raw canvas
                         rawCanvas.width = 1;
                         rawCanvas.height = 1;
                     }
 
-                    // 3. Compute PDF Dimensions
-                    let wMM, hMM, useOrient;
-                    if (pageSize === 'fit') {
-                        wMM = (finalCanvas.width / effectiveDpi) * 25.4;
-                        hMM = (finalCanvas.height / effectiveDpi) * 25.4;
-                    } else {
-                        [wMM, hMM] = [...baseDim];
-                    }
-
-                    useOrient = orientOpt === 'auto' ? (finalCanvas.width > finalCanvas.height ? 'l' : 'p') : orientOpt;
-                    if (useOrient === 'l' && pageSize !== 'fit') [wMM, hMM] = [hMM, wMM];
-
-                    const cWMM = Math.max(1, wMM - margin * 2);
-                    const cHMM = Math.max(1, hMM - margin * 2);
-                    const imgAR = finalCanvas.width / finalCanvas.height;
-                    const pageAR = cWMM / cHMM;
-
-                    let iW, iH, iX, iY;
-                    if (imgAR > pageAR) {
-                        iW = cWMM;
-                        iH = cWMM / imgAR;
-                        iX = margin;
-                        iY = margin + (cHMM - iH) / 2;
-                    } else {
-                        iH = cHMM;
-                        iW = cHMM * imgAR;
-                        iX = margin + (cWMM - iW) / 2;
-                        iY = margin;
-                    }
-
-                    // Ensure safe coordinates
-                    iX = Number.isFinite(iX) ? iX : margin;
-                    iY = Number.isFinite(iY) ? iY : margin;
-                    iW = Number.isFinite(iW) && iW > 0 ? iW : cWMM;
-                    iH = Number.isFinite(iH) && iH > 0 ? iH : cHMM;
-
-                    // Safety downscale if excessively oversized canvas
-                    const maxCanvasDim = 2500;
-                    let renderCanvas = finalCanvas;
-                    if (finalCanvas.width > maxCanvasDim || finalCanvas.height > maxCanvasDim) {
-                        const downScale = Math.min(maxCanvasDim / finalCanvas.width, maxCanvasDim / finalCanvas.height);
-                        renderCanvas = document.createElement('canvas');
-                        renderCanvas.width = Math.round(finalCanvas.width * downScale);
-                        renderCanvas.height = Math.round(finalCanvas.height * downScale);
-                        const dctx = renderCanvas.getContext('2d');
-                        dctx.fillStyle = '#ffffff';
-                        dctx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
-                        dctx.drawImage(finalCanvas, 0, 0, renderCanvas.width, renderCanvas.height);
-                    }
-
-                    const minEffectiveQ = targetBytes > 0 ? 0.04 : pdfQualityFloor;
-                    const clampedQuality = Math.min(1.0, Math.max(minEffectiveQ, quality));
-                    const imgData = renderCanvas.toDataURL('image/jpeg', clampedQuality);
-
-                    // Clean up intermediate canvas
-                    if (renderCanvas !== finalCanvas) {
-                        renderCanvas.width = 1;
-                        renderCanvas.height = 1;
-                    }
-                    finalCanvas.width = 1;
-                    finalCanvas.height = 1;
-
-                    if (!pdf) {
-                        pdf = new jsPDF({
-                            orientation: useOrient,
-                            unit: 'mm',
-                            format: pageSize === 'fit' ? [wMM, hMM] : pageSize,
-                            compress: true
-                        });
-                    } else {
-                        pdf.addPage(pageSize === 'fit' ? [wMM, hMM] : pageSize, useOrient);
-                    }
-
-                    pdf.addImage(imgData, 'JPEG', iX, iY, iW, iH, undefined, 'FAST');
-
-                    if (showPageNum) {
-                        pdf.setFontSize(9);
-                        pdf.setTextColor(100);
-                        pdf.text(`${pgNum}`, wMM / 2, hMM - 5, { align: 'center' });
-                    }
-                }
-
-                if (pdf && extraPadBytes > 0) {
-                    const padCount = Math.max(0, Math.round(extraPadBytes));
-                    if (padCount > 0) {
-                        pdf.setProperties({ keywords: 'V'.repeat(padCount) });
-                    }
-                }
-
-                const buffer = pdf.output('arraybuffer');
-                return {
-                    buffer,
-                    byteLength: buffer.byteLength,
-                    kb: buffer.byteLength / 1024,
-                    quality,
-                    scaleFactor
-                };
-            }
-
-            async function padPdfCandidateToTarget(candidate) {
-                if (!candidate || targetBytes <= 0 || candidate.byteLength >= targetBytes - 64) {
-                    return candidate;
-                }
-                try {
-                    // First try maximizing quality & gentle upscaling if natural output is still well below targetBytes
-                    let bestBase = candidate;
-                    if (bestBase.quality < 1.0 && bestBase.byteLength < targetBytes * 0.97) {
-                        const maxQCand = await buildCandidatePdf(1.0, bestBase.scaleFactor, 0);
-                        if (maxQCand.byteLength <= targetBytes) {
-                            bestBase = maxQCand;
-                        }
-                    }
-                    if (bestBase.byteLength < targetBytes * 0.97 && bestBase.scaleFactor < 1.5) {
-                        const hiResCand = await buildCandidatePdf(1.0, 1.5, 0);
-                        if (hiResCand.byteLength <= targetBytes && hiResCand.byteLength > bestBase.byteLength) {
-                            bestBase = hiResCand;
-                        }
-                    }
-                    if (bestBase.byteLength >= targetBytes - 64) {
-                        return bestBase;
-                    }
-
-                    const baseZero = bestBase;
-                    const deficit = Math.floor(targetBytes - baseZero.byteLength);
-                    if (deficit > 24) {
-                        if (onProgress) {
-                            onProgress({
-                                percent: 96,
-                                status: `Calibrating target PDF size (${(targetBytes / 1024).toFixed(0)} KB)…`
-                            });
-                        }
-                        let padLen = Math.max(0, deficit - 14);
-                        let padded = await buildCandidatePdf(bestBase.quality, bestBase.scaleFactor, padLen);
-                        const residual = Math.floor(targetBytes - padded.byteLength);
-                        if (Math.abs(residual) > 4 && (padLen + residual) >= 0) {
-                            padded = await buildCandidatePdf(bestBase.quality, bestBase.scaleFactor, padLen + residual);
-                        }
-                        if (padded && Math.abs(padded.byteLength - targetBytes) < Math.abs(bestBase.byteLength - targetBytes)) {
-                            return padded;
-                        }
-                    }
-                    return bestBase;
-                } catch (padErr) {
-                    console.warn('PDF target size calibration warning:', padErr);
-                    return candidate;
-                }
-            }
-
-            // Case A: No target KB specified => Single high-quality pass
-            if (targetBytes <= 0) {
-                const result = await buildCandidatePdf(baseQuality, 1.0);
-                return {
-                    buffer: result.buffer,
-                    actualBytes: result.byteLength,
-                    actualKB: result.kb,
-                    targetKB: 0,
-                    qualityUsed: baseQuality,
-                    targetReached: true,
-                    nearTarget: false,
-                    qualityProtected: true,
-                    bestSafeResult: false,
-                    status: 'smart_auto',
-                    statusMessage: `PDF Generated (${result.kb >= 1024 ? (result.kb / 1024).toFixed(2) + ' MB' : result.kb.toFixed(0) + ' KB'}, ${Math.round(baseQuality * 100)}% quality)`
-                };
-            }
-
-            // Case B: Target KB Specified => FORCED PDF TARGET-SIZE OPTIMIZATION
-            // Priority 1: Reach requested PDF target size (compress down or scale/calibrate up)
-            // STAGE 1: Full-Resolution (scaleFactor = 1.0) search
-            let lo = 0.04;
-            let hi = isCompress ? Math.max(baseQuality, 0.92) : 1.0;
-            let bestBelowOrEqual = null;
-            let closestCandidate = null;
-
-            // Quick probe at upper bound first so inputs smaller than targetBytes don't waste search iterations
-            const maxCand = await buildCandidatePdf(hi, 1.0);
-            closestCandidate = maxCand;
-            if (maxCand.byteLength <= targetBytes) {
-                bestBelowOrEqual = maxCand;
-            } else {
-                for (let attempt = 0; attempt < 8; attempt++) {
-                    const midQ = parseFloat(((lo + hi) / 2).toFixed(3));
-                    if (onProgress) {
-                        onProgress({
-                            attempt: attempt + 1,
-                            maxAttempts: 8,
-                            percent: Math.round(((attempt + 1) / 8) * 90),
-                            status: `Optimization Pass ${attempt + 1}/8 (quality ${Math.round(midQ * 100)}%)…`
-                        });
-                    }
-
-                    const candidate = await buildCandidatePdf(midQ, 1.0);
-
-                    if (!closestCandidate || Math.abs(candidate.byteLength - targetBytes) < Math.abs(closestCandidate.byteLength - targetBytes)) {
-                        closestCandidate = candidate;
-                    }
-
-                    if (candidate.byteLength <= targetBytes) {
-                        bestBelowOrEqual = candidate;
-                        lo = midQ + 0.02; // try closer to target
-                    } else {
-                        hi = midQ - 0.02;
-                    }
-
-                    // If within 2% of target, stop early
-                    if (Math.abs(candidate.byteLength - targetBytes) / targetBytes <= 0.02) {
-                        bestBelowOrEqual = candidate;
-                        break;
-                    }
-
-                    if (lo > hi) break;
-                }
-            }
-
-            if (bestBelowOrEqual) {
-                const calibrated = await padPdfCandidateToTarget(bestBelowOrEqual);
-                const diffPct = Math.abs((calibrated.byteLength - targetBytes) / targetBytes);
-                const isExact = diffPct <= 0.05 || calibrated.byteLength <= targetBytes;
-                return {
-                    buffer: calibrated.buffer,
-                    actualBytes: calibrated.byteLength,
-                    actualKB: calibrated.kb,
-                    targetKB,
-                    qualityUsed: calibrated.quality,
-                    targetReached: true,
-                    nearTarget: !isExact,
-                    qualityProtected: false,
-                    bestSafeResult: false,
-                    status: 'reached',
-                    statusMessage: `Target Reached (${calibrated.kb >= 1024 ? (calibrated.kb / 1024).toFixed(2) + ' MB' : calibrated.kb.toFixed(0) + ' KB'})`
-                };
-            }
-
-            // Check if closest candidate at 1.0 scale is within 5% of target
-            if (closestCandidate && closestCandidate.byteLength <= targetBytes * 1.05) {
-                return {
-                    buffer: closestCandidate.buffer,
-                    actualBytes: closestCandidate.byteLength,
-                    actualKB: closestCandidate.kb,
-                    targetKB,
-                    qualityUsed: closestCandidate.quality,
-                    targetReached: true,
-                    nearTarget: false,
-                    qualityProtected: false,
-                    bestSafeResult: false,
-                    status: 'reached',
-                    statusMessage: `Target Reached (${closestCandidate.kb >= 1024 ? (closestCandidate.kb / 1024).toFixed(2) + ' MB' : closestCandidate.kb.toFixed(0) + ' KB'})`
-                };
-            }
-
-            // STAGE 2: Quality alone at 100% resolution cannot reach target.
-            // Progressively reduce embedded image resolution (downsampling) until target is reached!
-            const pdfScaleSteps = [0.85, 0.70, 0.55, 0.40, 0.30, 0.20, 0.15];
-            let stage2Winner = null;
-
-            for (let idx = 0; idx < pdfScaleSteps.length; idx++) {
-                const scale = pdfScaleSteps[idx];
-                if (onProgress) {
-                    onProgress({
-                        attempt: idx + 1,
-                        maxAttempts: pdfScaleSteps.length,
-                        percent: Math.round(((idx + 1) / pdfScaleSteps.length) * 90),
-                        status: `Downsampling Resolution Pass ${idx + 1}/${pdfScaleSteps.length} (scale ${Math.round(scale * 100)}%)…`
+                    preparedPages.push({
+                        canvas: pristineCanvas,
+                        pristineW: pristineCanvas.width,
+                        pristineH: pristineCanvas.height
                     });
                 }
 
-                // Test reasonable quality at this scale
-                const testCand = await buildCandidatePdf(0.65, scale);
-                if (!closestCandidate || Math.abs(testCand.byteLength - targetBytes) < Math.abs(closestCandidate.byteLength - targetBytes)) {
-                    closestCandidate = testCand;
+                // Optimize a single page canvas using Image Editor Compress Tool's exact Two-Stage formula
+                const optimizePageToBudget = async (pageCanvas, pageBudgetBytes, maxQualityInt = 95) => {
+                    const origW = pageCanvas.width || 1;
+                    const origH = pageCanvas.height || 1;
+                    const SAFE_STAGE_A_MIN_Q = 68;
+                    const SAFE_STAGE_B_MIN_Q = 72;
+
+                    const findBestQualityAtScale = async (scale, minQ, maxQ) => {
+                        let lQ = minQ;
+                        let hQ = maxQ;
+                        let bestAtScale = null;
+                        while (lQ <= hQ) {
+                            const midQ = Math.floor((lQ + hQ) / 2);
+                            const cand = await renderMipmapToJpeg(pageCanvas, scale, midQ);
+                            if (cand.byteLength <= pageBudgetBytes) {
+                                bestAtScale = cand;
+                                lQ = midQ + 1;
+                            } else {
+                                hQ = midQ - 1;
+                            }
+                        }
+                        return bestAtScale;
+                    };
+
+                    // STAGE A: 100% Resolution with Safe Quality Floor [68..maxQualityInt]
+                    let chosen = await findBestQualityAtScale(1.0, SAFE_STAGE_A_MIN_Q, maxQualityInt);
+
+                    if (!chosen) {
+                        // STAGE B: Proportional Resolution Binary Search keeping Crisp Quality [72..maxQualityInt]
+                        const maxOrigDim = Math.max(origW, origH, 1);
+                        const minCrispScale = Math.max(0.06, Math.min(0.90, 96 / maxOrigDim));
+                        const validScaleCandidates = [];
+                        let loScale = minCrispScale;
+                        let hiScale = 0.96;
+
+                        for (let iter = 0; iter < 9; iter++) {
+                            const midScale = parseFloat(((loScale + hiScale) / 2).toFixed(4));
+                            const candAtScale = await findBestQualityAtScale(midScale, SAFE_STAGE_B_MIN_Q, maxQualityInt);
+                            if (candAtScale !== null) {
+                                validScaleCandidates.push(candAtScale);
+                                loScale = midScale + 0.006;
+                            } else {
+                                hiScale = midScale - 0.006;
+                            }
+                            if (loScale > hiScale) break;
+                        }
+
+                        if (validScaleCandidates.length > 0) {
+                            validScaleCandidates.sort((a, b) => (b.scale - a.scale) || (b.qualityInt - a.qualityInt));
+                            chosen = validScaleCandidates[0];
+
+                            // Compress Tool polish: if near quality floor (Q < 78), step scale down 8% to jump Q >= 80
+                            if (chosen.qualityInt < 78 && chosen.scale * 0.92 >= minCrispScale) {
+                                const smootherScale = parseFloat((chosen.scale * 0.92).toFixed(4));
+                                const smootherCand = await findBestQualityAtScale(smootherScale, 78, maxQualityInt);
+                                if (smootherCand && smootherCand.qualityInt >= 80 && smootherCand.byteLength >= pageBudgetBytes * 0.80) {
+                                    chosen = smootherCand;
+                                }
+                            }
+                        }
+                    }
+
+                    // STAGE C1: Moderate Quality Fallback [52..71]
+                    if (!chosen || chosen.byteLength > pageBudgetBytes) {
+                        const modScales = [0.65, 0.45, 0.30, 0.20, 0.12, 0.06];
+                        for (const sc of modScales) {
+                            const modCand = await findBestQualityAtScale(sc, 52, 71);
+                            if (modCand && modCand.byteLength <= pageBudgetBytes) {
+                                chosen = modCand;
+                                break;
+                            }
+                        }
+                    }
+
+                    // STAGE C2: Emergency Downscale Fallback [1..51] for extreme tiny KB limits
+                    if (!chosen || chosen.byteLength > pageBudgetBytes) {
+                        let emScale = 0.5;
+                        while (emScale >= 0.02) {
+                            const emCand = await findBestQualityAtScale(emScale, 1, 51);
+                            if (emCand && emCand.byteLength <= pageBudgetBytes) {
+                                chosen = emCand;
+                                break;
+                            }
+                            emScale = parseFloat((emScale * 0.7).toFixed(4));
+                        }
+                    }
+
+                    if (!chosen) {
+                        chosen = await renderMipmapToJpeg(pageCanvas, 0.05, 35);
+                    }
+                    return chosen;
+                };
+
+                // Helper: Compile prepared page JPEGs into a valid jsPDF document without distorting aspect ratio
+                const compilePdfFromPageAssets = async (pageAssets, extraPadBytes = 0) => {
+                    let pdf = null;
+                    let totalImageBytes = 0;
+
+                    for (let i = 0; i < totalPages; i++) {
+                        const prep = preparedPages[i];
+                        const asset = pageAssets[i];
+                        const pgNum = i + 1;
+                        totalImageBytes += asset.byteLength;
+
+                        // Determine physical page dimensions in mm from pristine dimensions (never shrunken by Stage B scale)
+                        let wMM, hMM, useOrient;
+                        if (pageSize === 'fit') {
+                            const imgWMM = (prep.pristineW / baseDpi) * 25.4;
+                            const imgHMM = (prep.pristineH / baseDpi) * 25.4;
+                            wMM = imgWMM + margin * 2;
+                            hMM = imgHMM + margin * 2;
+                            useOrient = orientOpt === 'auto' ? (wMM > hMM ? 'l' : 'p') : orientOpt;
+                        } else {
+                            [wMM, hMM] = [...baseDim];
+                            useOrient = orientOpt === 'auto' ? (prep.pristineW > prep.pristineH ? 'l' : 'p') : orientOpt;
+                        }
+
+                        const formatArg = pageSize === 'fit' ? [wMM, hMM] : pageSize;
+                        if (!pdf) {
+                            pdf = new jsPDF({
+                                orientation: useOrient,
+                                unit: 'mm',
+                                format: formatArg,
+                                compress: true
+                            });
+                        } else {
+                            pdf.addPage(formatArg, useOrient);
+                        }
+
+                        // Always read the actual jsPDF page box after orientation resolution so iW/iH never distort
+                        const actualPageW = pdf.internal.pageSize.getWidth();
+                        const actualPageH = pdf.internal.pageSize.getHeight();
+                        const cWMM = Math.max(1, actualPageW - margin * 2);
+                        const cHMM = Math.max(1, actualPageH - margin * 2);
+
+                        const imgAR = (asset.width || prep.pristineW) / Math.max(1, asset.height || prep.pristineH);
+                        const pageAR = cWMM / cHMM;
+
+                        let iW, iH, iX, iY;
+                        if (imgAR > pageAR) {
+                            iW = cWMM;
+                            iH = cWMM / imgAR;
+                            iX = margin;
+                            iY = margin + (cHMM - iH) / 2;
+                        } else {
+                            iH = cHMM;
+                            iW = cHMM * imgAR;
+                            iX = margin + (cWMM - iW) / 2;
+                            iY = margin;
+                        }
+
+                        iX = Number.isFinite(iX) ? iX : margin;
+                        iY = Number.isFinite(iY) ? iY : margin;
+                        iW = Number.isFinite(iW) && iW > 0 ? iW : cWMM;
+                        iH = Number.isFinite(iH) && iH > 0 ? iH : cHMM;
+
+                        const jpegBytes = new Uint8Array(await asset.blob.arrayBuffer());
+                        pdf.addImage(jpegBytes, 'JPEG', iX, iY, iW, iH, undefined, 'FAST');
+
+                        if (showPageNum) {
+                            pdf.setFontSize(9);
+                            pdf.setTextColor(100);
+                            pdf.text(`${pgNum}`, actualPageW / 2, actualPageH - 5, { align: 'center' });
+                        }
+                    }
+
+                    if (pdf && extraPadBytes > 0) {
+                        const padCount = Math.max(0, Math.round(extraPadBytes));
+                        if (padCount > 0) {
+                            pdf.setProperties({ keywords: 'V'.repeat(padCount) });
+                        }
+                    }
+
+                    const buffer = pdf.output('arraybuffer');
+                    const avgQuality = pageAssets.reduce((s, a) => s + a.qualityFloat, 0) / Math.max(1, pageAssets.length);
+                    return {
+                        buffer,
+                        byteLength: buffer.byteLength,
+                        kb: buffer.byteLength / 1024,
+                        totalImageBytes,
+                        quality: avgQuality,
+                        pageAssets
+                    };
+                };
+
+                // Case A: No Target KB Specified => Single high-fidelity pass at requested quality & 100% aspect-safe resolution
+                if (targetBytes <= 0) {
+                    const effectiveQFloat = Math.min(1.0, Math.max(pdfQualityFloor, baseQuality));
+                    const qInt = Math.round(effectiveQFloat * 100);
+                    const assets = [];
+                    for (let i = 0; i < totalPages; i++) {
+                        if (onProgress) {
+                            onProgress({
+                                pageIndex: i,
+                                totalPages,
+                                percent: 30 + Math.round(((i + 1) / totalPages) * 65),
+                                status: `Encoding page ${i + 1}/${totalPages} (${qInt}% quality)…`
+                            });
+                        }
+                        assets.push(await renderMipmapToJpeg(preparedPages[i].canvas, 1.0, qInt));
+                    }
+                    const compiled = await compilePdfFromPageAssets(assets, 0);
+                    return {
+                        buffer: compiled.buffer,
+                        actualBytes: compiled.byteLength,
+                        actualKB: compiled.kb,
+                        targetKB: 0,
+                        qualityUsed: compiled.quality,
+                        targetReached: true,
+                        nearTarget: false,
+                        qualityProtected: true,
+                        bestSafeResult: false,
+                        status: 'smart_auto',
+                        statusMessage: `PDF Generated (${compiled.kb >= 1024 ? (compiled.kb / 1024).toFixed(2) + ' MB' : compiled.kb.toFixed(0) + ' KB'}, ${qInt}% quality)`
+                    };
                 }
 
-                if (testCand.byteLength <= targetBytes) {
-                    stage2Winner = testCand;
-                    break;
-                } else {
-                    // Try lower quality at this scale
-                    const lowerCand = await buildCandidatePdf(0.35, scale);
-                    if (!closestCandidate || Math.abs(lowerCand.byteLength - targetBytes) < Math.abs(closestCandidate.byteLength - targetBytes)) {
-                        closestCandidate = lowerCand;
+                // Case B: Target KB Specified
+                const baseMaxQInt = isCompress ? 95 : 100;
+
+                // Increase PDF mode: maximize resolution & quality first, then calibrate up if below targetBytes
+                if (!isCompress) {
+                    const maxAssets = [];
+                    for (let i = 0; i < totalPages; i++) {
+                        if (onProgress) {
+                            onProgress({
+                                pageIndex: i,
+                                totalPages,
+                                percent: 30 + Math.round(((i + 1) / totalPages) * 50),
+                                status: `Building high-fidelity page ${i + 1}/${totalPages}…`
+                            });
+                        }
+                        maxAssets.push(await renderMipmapToJpeg(preparedPages[i].canvas, 1.0, 100));
                     }
-                    if (lowerCand.byteLength <= targetBytes) {
-                        stage2Winner = lowerCand;
+                    let compiled = await compilePdfFromPageAssets(maxAssets, 0);
+                    if (compiled.byteLength < targetBytes - 64) {
+                        const deficit = Math.floor(targetBytes - compiled.byteLength);
+                        if (deficit > 24) {
+                            let padLen = Math.max(0, deficit - 14);
+                            let padded = await compilePdfFromPageAssets(maxAssets, padLen);
+                            const residual = Math.floor(targetBytes - padded.byteLength);
+                            if (Math.abs(residual) > 4 && (padLen + residual) >= 0) {
+                                padded = await compilePdfFromPageAssets(maxAssets, padLen + residual);
+                            }
+                            if (padded && Math.abs(padded.byteLength - targetBytes) < Math.abs(compiled.byteLength - targetBytes)) {
+                                compiled = padded;
+                            }
+                        }
+                    } else if (compiled.byteLength > targetBytes) {
+                        // Even Increase mode had target < natural 100% size: optimize down cleanly
+                        const estOverhead = 1500 + totalPages * 500;
+                        let imgBudget = Math.max(totalPages * 2048, targetBytes - estOverhead);
+                        let usedImg = 0;
+                        const optAssets = [];
+                        for (let i = 0; i < totalPages; i++) {
+                            const rem = totalPages - i;
+                            const budget = Math.max(2048, Math.floor((imgBudget - usedImg) / rem));
+                            const best = await optimizePageToBudget(preparedPages[i].canvas, budget, 95);
+                            usedImg += best.byteLength;
+                            optAssets.push(best);
+                        }
+                        compiled = await compilePdfFromPageAssets(optAssets, 0);
+                    }
+                    const reachedInc = compiled.byteLength >= targetBytes * 0.92;
+                    return {
+                        buffer: compiled.buffer,
+                        actualBytes: compiled.byteLength,
+                        actualKB: compiled.kb,
+                        targetKB,
+                        qualityUsed: compiled.quality,
+                        targetReached: reachedInc,
+                        nearTarget: !reachedInc,
+                        qualityProtected: true,
+                        bestSafeResult: false,
+                        status: reachedInc ? 'reached' : 'near',
+                        statusMessage: `Target ${reachedInc ? 'Reached' : 'Near'} (${compiled.kb >= 1024 ? (compiled.kb / 1024).toFixed(2) + ' MB' : compiled.kb.toFixed(0) + ' KB'})`
+                    };
+                }
+
+                // Compress / Target Limit Mode: Apply Image Editor Compress Tool formula per page
+                // with dynamic leftover budget reallocation + corrective PDF calibration pass
+                const estOverhead = 1500 + totalPages * 500;
+                let totalImgBudget = Math.max(totalPages * 1024, targetBytes - estOverhead);
+                let bestCompiled = null;
+
+                for (let pass = 0; pass < 3; pass++) {
+                    const pageAssets = [];
+                    let usedImgBytes = 0;
+
+                    for (let i = 0; i < totalPages; i++) {
+                        if (onProgress) {
+                            const pctBase = pass === 0 ? 30 : 72;
+                            const pctSpan = pass === 0 ? 40 : 22;
+                            onProgress({
+                                pageIndex: i,
+                                totalPages,
+                                percent: Math.min(95, pctBase + Math.round(((i + 1) / totalPages) * pctSpan)),
+                                status: pass === 0
+                                    ? `Optimizing page ${i + 1}/${totalPages} (Quality-Protected)…`
+                                    : `Fine-tuning PDF budget (pass ${pass + 1})…`
+                            });
+                        }
+                        const remainingPages = totalPages - i;
+                        const pageBudget = Math.max(1024, Math.floor((totalImgBudget - usedImgBytes) / remainingPages));
+                        const cand = await optimizePageToBudget(preparedPages[i].canvas, pageBudget, baseMaxQInt);
+                        usedImgBytes += cand.byteLength;
+                        pageAssets.push(cand);
+                    }
+
+                    const compiled = await compilePdfFromPageAssets(pageAssets, 0);
+                    if (!bestCompiled ||
+                        (compiled.byteLength <= targetBytes && (bestCompiled.byteLength > targetBytes || compiled.byteLength > bestCompiled.byteLength)) ||
+                        (bestCompiled.byteLength > targetBytes && compiled.byteLength < bestCompiled.byteLength)) {
+                        bestCompiled = compiled;
+                    }
+
+                    if (compiled.byteLength <= targetBytes) {
                         break;
+                    }
+
+                    // Adjust image byte budget using exact measured PDF container overhead
+                    const actualContainerOverhead = Math.max(1024, compiled.byteLength - compiled.totalImageBytes);
+                    const nextBudget = Math.max(totalPages * 800, Math.floor((targetBytes - actualContainerOverhead) * 0.96));
+                    if (nextBudget >= totalImgBudget * 0.99) {
+                        totalImgBudget = Math.floor(totalImgBudget * 0.85);
+                    } else {
+                        totalImgBudget = nextBudget;
+                    }
+                }
+
+                const finalPick = bestCompiled;
+                const reached = finalPick.byteLength <= targetBytes || (Math.abs(finalPick.byteLength - targetBytes) / targetBytes) <= 0.05;
+                const qDisp = Math.round(finalPick.quality * 100);
+
+                return {
+                    buffer: finalPick.buffer,
+                    actualBytes: finalPick.byteLength,
+                    actualKB: finalPick.kb,
+                    targetKB,
+                    qualityUsed: finalPick.quality,
+                    targetReached: reached,
+                    nearTarget: !reached,
+                    qualityProtected: finalPick.quality >= 0.68,
+                    bestSafeResult: false,
+                    status: reached ? 'reached' : 'near',
+                    statusMessage: reached
+                        ? `🎯 Target Reached (${finalPick.kb >= 1024 ? (finalPick.kb / 1024).toFixed(2) + ' MB' : finalPick.kb.toFixed(0) + ' KB'}, Quality: ${qDisp}%)`
+                        : `Near Target (${finalPick.kb >= 1024 ? (finalPick.kb / 1024).toFixed(2) + ' MB' : finalPick.kb.toFixed(0) + ' KB'}, Quality: ${qDisp}%)`
+                };
+            } finally {
+                for (const prep of preparedPages) {
+                    if (prep.canvas) {
+                        prep.canvas.width = 1;
+                        prep.canvas.height = 1;
                     }
                 }
             }
-
-            const finalPick = stage2Winner ? await padPdfCandidateToTarget(stage2Winner) : closestCandidate;
-            const reached = finalPick.byteLength <= targetBytes || (Math.abs(finalPick.byteLength - targetBytes) / targetBytes) <= 0.08;
-
-            return {
-                buffer: finalPick.buffer,
-                actualBytes: finalPick.byteLength,
-                actualKB: finalPick.kb,
-                targetKB,
-                qualityUsed: finalPick.quality,
-                targetReached: reached,
-                nearTarget: !reached,
-                qualityProtected: false,
-                bestSafeResult: false,
-                status: reached ? 'reached' : 'near',
-                statusMessage: reached
-                    ? `Target Reached (${finalPick.kb >= 1024 ? (finalPick.kb / 1024).toFixed(2) + ' MB' : finalPick.kb.toFixed(0) + ' KB'})`
-                    : `Near Target (${finalPick.kb >= 1024 ? (finalPick.kb / 1024).toFixed(2) + ' MB' : finalPick.kb.toFixed(0) + ' KB'})`
-            };
         }
     };
 
